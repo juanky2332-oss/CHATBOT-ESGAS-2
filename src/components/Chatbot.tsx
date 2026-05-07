@@ -69,6 +69,7 @@ export default function Chatbot() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [hasNew, setHasNew] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   const [sessionId] = useState<string>(() => {
     if (typeof window === 'undefined') return `s-${Date.now()}`;
@@ -83,9 +84,17 @@ export default function Chatbot() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const open = () => { setIsOpen(true); setHasNew(false); };
+    const open = () => { setIsOpen(true); setHasNew(false); setShowTooltip(false); };
     window.addEventListener('open-chat', open);
     return () => window.removeEventListener('open-chat', open);
+  }, []);
+
+  // Tooltip: aparece a los 3s si el usuario nunca ha abierto el chat
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem('esgas-tooltip-seen')) return;
+    const t = setTimeout(() => setShowTooltip(true), 3000);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -376,49 +385,133 @@ export default function Chatbot() {
         </div>
       </div>
 
-      {/* ── FAB Toggle ── */}
-      <button
-        onClick={() => { setIsOpen(!isOpen); setHasNew(false); }}
-        className="relative w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300"
-        style={{
-          background: isOpen
-            ? '#1E2D4A'
-            : 'linear-gradient(135deg, #0099CC 0%, #0056D6 100%)',
-          boxShadow: isOpen ? 'none' : '0 8px 32px rgba(0,100,200,0.5)',
-          transform: isOpen ? 'scale(0.93)' : 'scale(1)',
-        }}
-        onMouseEnter={(e) => {
-          if (!isOpen)
-            (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.08)';
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.transform = isOpen
-            ? 'scale(0.93)'
-            : 'scale(1)';
-        }}
-        aria-label={isOpen ? 'Cerrar chat' : 'Abrir asistente ESGAS'}
-      >
+      {/* ── Mini Robot FAB ── */}
+      <div className="relative flex flex-col items-center">
+
+        {/* Tooltip speech bubble */}
+        {showTooltip && !isOpen && (
+          <div
+            className="absolute bottom-[88px] right-0 pointer-events-none select-none"
+            style={{ animation: 'esgas-fadein 0.4s ease forwards' }}
+          >
+            <div
+              className="relative text-xs font-semibold text-white px-4 py-2.5 rounded-2xl rounded-br-sm whitespace-nowrap"
+              style={{
+                background: 'linear-gradient(135deg, #003D99, #0078C8)',
+                boxShadow: '0 8px 24px rgba(0,80,200,0.45)',
+              }}
+            >
+              ¿Tienes alguna duda? 💬
+              {/* Arrow */}
+              <span
+                className="absolute -bottom-[7px] right-5 w-3.5 h-3.5 rotate-45 rounded-sm"
+                style={{ background: '#0078C8' }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* New-message badge */}
         {hasNew && !isOpen && (
           <span
-            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
-            style={{
-              background: '#EF4444',
-              border: '2px solid #050B18',
-            }}
+            className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+            style={{ background: '#EF4444', border: '2px solid #050B18' }}
           >
             1
           </span>
         )}
-        {isOpen ? (
-          <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" width={26} height={26} fill="white">
-            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" />
-          </svg>
+
+        {/* The button */}
+        <button
+          onClick={() => {
+            const opening = !isOpen;
+            setIsOpen(opening);
+            setHasNew(false);
+            if (opening) {
+              setShowTooltip(false);
+              localStorage.setItem('esgas-tooltip-seen', '1');
+            }
+          }}
+          aria-label={isOpen ? 'Cerrar asistente ESGAS' : 'Abrir asistente ESGAS'}
+          className="relative w-[72px] h-[72px] rounded-2xl flex items-center justify-center overflow-visible"
+          style={{
+            background: isOpen
+              ? 'linear-gradient(135deg, #1E2D4A, #0F1F38)'
+              : 'linear-gradient(135deg, #003D99, #0078C8)',
+            boxShadow: isOpen
+              ? '0 4px 16px rgba(0,0,0,0.4)'
+              : '0 8px 32px rgba(0,80,200,0.55), 0 0 0 1px rgba(255,255,255,0.08)',
+            transition: 'background 0.3s, box-shadow 0.3s',
+            animation: isOpen ? 'none' : 'leanFloat 3.5s ease-in-out infinite',
+          }}
+        >
+          {isOpen ? (
+            /* Close X */
+            <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          ) : (
+            /* Mini robot SVG — misma identidad visual que LeanRobot */
+            <svg
+              viewBox="0 0 60 72"
+              width="52"
+              height="62"
+              style={{ overflow: 'visible' }}
+            >
+              <defs>
+                <linearGradient id="fabGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#FFFFFF" />
+                  <stop offset="100%" stopColor="#CBD5E1" />
+                </linearGradient>
+                <filter id="fabShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
+                  <feOffset dx="0" dy="1.5" result="o" />
+                  <feComponentTransfer><feFuncA type="linear" slope="0.25" /></feComponentTransfer>
+                  <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+              </defs>
+
+              {/* Antenna */}
+              <line x1="30" y1="3" x2="30" y2="-6" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round" />
+              <circle cx="30" cy="-8" r="4" className="fab-antenna" />
+
+              {/* Head */}
+              <rect x="3" y="3" width="54" height="50" rx="22" fill="url(#fabGrad)" />
+              {/* Face screen */}
+              <rect x="9" y="14" width="42" height="28" rx="11" fill="#0A1628" />
+
+              {/* Eyes */}
+              <circle cx="21" cy="28" r="6.5" className="fab-eye-l" />
+              <circle cx="39" cy="28" r="6.5" className="fab-eye-r" />
+              {/* Eye highlights */}
+              <circle cx="23" cy="26" r="2.2" fill="white" fillOpacity="0.85" />
+              <circle cx="41" cy="26" r="2.2" fill="white" fillOpacity="0.85" />
+
+              {/* Blink group */}
+              <g style={{ animation: 'blinkEyesOnly 4s infinite', transformOrigin: '30px 28px' }}>
+                <circle cx="21" cy="28" r="6.5" fill="#0A1628" fillOpacity="0" />
+                <circle cx="39" cy="28" r="6.5" fill="#0A1628" fillOpacity="0" />
+              </g>
+
+              {/* Smile */}
+              <path d="M20 36 Q30 42 40 36" fill="none" stroke="#00D1FF" strokeWidth="1.8" strokeLinecap="round" opacity="0.65" />
+
+              {/* Body stub */}
+              <rect x="17" y="53" width="26" height="16" rx="8" fill="#94A3B8" filter="url(#fabShadow)" />
+              {/* Arms stubs */}
+              <rect x="0" y="52" width="14" height="10" rx="5" fill="#CBD5E1" filter="url(#fabShadow)" />
+              <rect x="46" y="52" width="14" height="10" rx="5" fill="#CBD5E1" filter="url(#fabShadow)" />
+            </svg>
+          )}
+        </button>
+
+        {/* "powered by" subtle label */}
+        {!isOpen && (
+          <span className="mt-1.5 text-[9px] text-slate-600 font-medium tracking-wide select-none">
+            ESGAS AI
+          </span>
         )}
-      </button>
+      </div>
 
     </div>
   );

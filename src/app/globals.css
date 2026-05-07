@@ -146,3 +146,25 @@ body {
 .robot-antenna-pulse {
   animation: pulseLight 1.5s infinite;
 }
+
+@keyframes esgas-fadein {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* FAB mini robot */
+.fab-robot-float {
+  animation: leanFloat 3.5s ease-in-out infinite;
+}
+
+.fab-eye-l {
+  animation: pulseLight 2.2s ease-in-out infinite;
+}
+
+.fab-eye-r {
+  animation: pulseLight 2.2s ease-in-out infinite 0.6s;
+}
+
+.fab-antenna {
+  animation: pulseLight 1.5s ease-in-out infinite;
+}

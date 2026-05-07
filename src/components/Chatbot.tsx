@@ -420,16 +420,6 @@ export default function Chatbot() {
         )}
       </button>
 
-      <style jsx global>{`
-        @keyframes esgas-bounce {
-          0%, 60%, 100% { transform: translateY(0); }
-          30% { transform: translateY(-6px); }
-        }
-        @keyframes esgas-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-      `}</style>
     </div>
   );
 }

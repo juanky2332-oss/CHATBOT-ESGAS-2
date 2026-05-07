@@ -229,13 +229,6 @@ export default function Home() {
       </footer>
 
       <Chatbot />
-
-      <style jsx global>{`
-        @keyframes esgas-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-      `}</style>
     </main>
   );
 }

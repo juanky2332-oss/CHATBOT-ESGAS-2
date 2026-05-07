@@ -1,15 +1,148 @@
 @import "tailwindcss";
 
+/* ── Base ── */
 body {
-    min-height: 100vh;
+  min-height: 100vh;
 }
 
+/* ── Page layout ── */
+.esgas-main {
+  background: #050B18;
+  color: white;
+}
+
+.esgas-blob-left {
+  top: -10%;
+  left: -10%;
+  width: 60vw;
+  height: 60vw;
+  background: radial-gradient(circle, rgba(0, 86, 214, 0.18) 0%, transparent 70%);
+}
+
+.esgas-blob-right {
+  bottom: -10%;
+  right: -10%;
+  width: 60vw;
+  height: 60vw;
+  background: radial-gradient(circle, rgba(0, 153, 204, 0.14) 0%, transparent 70%);
+}
+
+.esgas-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* ── Navbar ── */
+.esgas-logo-icon {
+  background: linear-gradient(135deg, #0099cc, #0056d6);
+}
+
+.esgas-badge {
+  color: #00c2e0;
+  background: rgba(0, 194, 224, 0.1);
+}
+
+.esgas-nav-link {
+  color: rgba(148, 163, 184, 1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.esgas-nav-link:hover {
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Hero ── */
+.esgas-tag {
+  color: #00c2e0;
+  background: rgba(0, 194, 224, 0.08);
+  border: 1px solid rgba(0, 194, 224, 0.25);
+}
+
+.esgas-gradient-text {
+  background: linear-gradient(135deg, #00c2e0, #0099ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.esgas-cta-btn {
+  background: linear-gradient(135deg, #0099cc, #0056d6);
+  box-shadow: 0 4px 20px rgba(0, 100, 200, 0.35);
+}
+.esgas-cta-btn:hover {
+  box-shadow: 0 8px 30px rgba(0, 100, 200, 0.55);
+  transform: translateY(-1px);
+}
+
+.esgas-outline-btn {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.esgas-outline-btn:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: white;
+}
+
+.esgas-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Feature cards ── */
+.esgas-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.esgas-card:hover {
+  background: rgba(0, 153, 204, 0.07);
+  border-color: rgba(0, 153, 204, 0.35);
+}
+
+/* ── Footer ── */
+.esgas-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ── Animations ── */
 @keyframes esgas-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 @keyframes esgas-bounce {
-    0%, 60%, 100% { transform: translateY(0); }
-    30% { transform: translateY(-6px); }
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+
+@keyframes leanFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes blinkEyesOnly {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+@keyframes pulseLight {
+  0%, 100% { fill: #00d1ff; filter: blur(0px); }
+  50% { fill: #fff; filter: blur(2px); }
+}
+
+.esgas-pulse-dot {
+  animation: esgas-pulse 2s ease-in-out infinite;
+}
+
+.robot-float {
+  animation: leanFloat 4s ease-in-out infinite;
+}
+
+.robot-blink {
+  animation: blinkEyesOnly 4s infinite;
+  transform-origin: center 45px;
+}
+
+.robot-antenna-pulse {
+  animation: pulseLight 1.5s infinite;
 }

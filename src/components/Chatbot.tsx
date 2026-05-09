@@ -5,12 +5,52 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 const WEBHOOK_URL =
   'https://paneln8n.transformaconia.com/webhook/031ab1e6-d64e-41f0-b03e-f5c0681a6491';
 
+const QUICK_REPLIES = [
+  '¿Tenéis el rodamiento 6204 EE?',
+  '¿Cuánto tarda un pedido?',
+  'Busco soporte UCF 205',
+  '¿Tenéis rodamientos inoxidables?',
+];
+
 type Message = {
   id: string;
   role: 'user' | 'bot';
   content: string;
   ts: Date;
 };
+
+interface ProductCard {
+  ref: string;
+  name?: string;
+  url: string;
+  stock?: number;
+}
+
+function parseProductCards(text: string): { text: string; cards: ProductCard[] } {
+  const match = text.match(/```products\n([\s\S]*?)\n```/);
+  if (!match) return { text, cards: [] };
+  try {
+    const cards = JSON.parse(match[1]) as ProductCard[];
+    const cleanText = text.replace(/```products\n[\s\S]*?\n```\n?/, '').trim();
+    return { text: cleanText, cards };
+  } catch {
+    return { text, cards: [] };
+  }
+}
+
+function stockColor(stock?: number): string {
+  if (stock === undefined || stock < 0) return '#64748B';
+  if (stock === 0) return '#EF4444';
+  if (stock <= 10) return '#F59E0B';
+  return '#10B981';
+}
+
+function stockLabel(stock?: number): string {
+  if (stock === undefined || stock < 0) return 'Ver catálogo';
+  if (stock === 0) return 'Sin stock';
+  if (stock <= 10) return `${stock} uds`;
+  return `${stock} uds`;
+}
 
 function TypingDots() {
   return (
@@ -36,6 +76,10 @@ function renderContent(text: string) {
       .replace(
         /`(.*?)`/g,
         '<code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-size:0.85em">$1</code>',
+      )
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#00C2E0;text-decoration:underline;text-underline-offset:2px">$1</a>',
       );
     return (
       <span key={i}>
@@ -46,7 +90,7 @@ function renderContent(text: string) {
   });
 }
 
-/* ── Mini robot SVG (idéntico al LeanRobot, mismo viewBox/formas) ── */
+/* ── Mini robot SVG ── */
 function FabRobot({ dimmed }: { dimmed?: boolean }) {
   return (
     <svg
@@ -140,6 +184,8 @@ export default function Chatbot() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const userHasSpoken = messages.some((m) => m.role === 'user');
+
   useEffect(() => {
     const open = () => { setIsOpen(true); setHasNew(false); setShowTooltip(false); };
     window.addEventListener('open-chat', open);
@@ -222,13 +268,11 @@ export default function Chatbot() {
       className="fixed bottom-4 right-4 z-[999999] flex flex-col items-end"
       style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', gap: '10px' }}
     >
-      {/* ──────────────────────────────────────────
-          CHAT PANEL
-      ────────────────────────────────────────── */}
+      {/* ── CHAT PANEL ── */}
       <div
         style={{
           width: 'min(420px, calc(100vw - 24px))',
-          height: 'min(580px, calc(100dvh - 210px))',
+          height: 'min(600px, calc(100dvh - 210px))',
           transition: 'opacity 0.35s ease, transform 0.45s cubic-bezier(0.34,1.56,0.64,1)',
           opacity: isOpen ? 1 : 0,
           transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.93) translateY(12px)',
@@ -250,7 +294,6 @@ export default function Chatbot() {
               borderBottom: '1px solid rgba(255,255,255,0.06)',
             }}
           >
-            {/* Avatar */}
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{
@@ -263,7 +306,6 @@ export default function Chatbot() {
               </svg>
             </div>
 
-            {/* Name + status */}
             <div className="flex-1 min-w-0">
               <p className="font-bold text-white text-sm tracking-tight">Asistente ESGAS</p>
               <div className="flex items-center gap-1.5 mt-0.5">
@@ -277,7 +319,6 @@ export default function Chatbot() {
               </div>
             </div>
 
-            {/* Minimizar — chevron down */}
             <button
               onClick={toggleOpen}
               className="flex items-center justify-center rounded-xl transition-all duration-200"
@@ -312,56 +353,156 @@ export default function Chatbot() {
 
           {/* ── Messages ── */}
           <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {msg.role === 'bot' && (
-                  <div
-                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                    style={{
-                      background: 'linear-gradient(135deg, #0047C8, #0092C2)',
-                      boxShadow: '0 2px 8px rgba(0,80,200,0.3)',
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" width={13} height={13} fill="white">
-                      <path d="M12 2a2 2 0 0 1 2 2 2 2 0 0 1-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2M7 14a5 5 0 0 0 10 0m-9 6v-2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2z" />
-                    </svg>
-                  </div>
-                )}
+            {messages.map((msg, msgIdx) => {
+              const { text: cleanText, cards } = msg.role === 'bot'
+                ? parseProductCards(msg.content)
+                : { text: msg.content, cards: [] };
 
-                <div
-                  className={`flex flex-col gap-1 max-w-[80%] ${
-                    msg.role === 'user' ? 'items-end' : 'items-start'
-                  }`}
-                >
+              return (
+                <div key={msg.id}>
                   <div
-                    className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                      msg.role === 'user' ? 'rounded-br-sm' : 'rounded-bl-sm'
-                    }`}
-                    style={
-                      msg.role === 'user'
-                        ? {
-                            background: 'linear-gradient(135deg, #0047C8, #0078B8)',
-                            color: 'white',
-                            boxShadow: '0 4px 16px rgba(0,80,200,0.28)',
-                          }
-                        : {
-                            background: '#101D30',
-                            color: '#CDD6E3',
-                            border: '1px solid rgba(255,255,255,0.07)',
-                          }
-                    }
+                    className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    {renderContent(msg.content)}
+                    {msg.role === 'bot' && (
+                      <div
+                        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                        style={{
+                          background: 'linear-gradient(135deg, #0047C8, #0092C2)',
+                          boxShadow: '0 2px 8px rgba(0,80,200,0.3)',
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" width={13} height={13} fill="white">
+                          <path d="M12 2a2 2 0 0 1 2 2 2 2 0 0 1-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2M7 14a5 5 0 0 0 10 0m-9 6v-2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2z" />
+                        </svg>
+                      </div>
+                    )}
+
+                    <div
+                      className={`flex flex-col gap-1 max-w-[80%] ${
+                        msg.role === 'user' ? 'items-end' : 'items-start'
+                      }`}
+                    >
+                      <div
+                        className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                          msg.role === 'user' ? 'rounded-br-sm' : 'rounded-bl-sm'
+                        }`}
+                        style={
+                          msg.role === 'user'
+                            ? {
+                                background: 'linear-gradient(135deg, #0047C8, #0078B8)',
+                                color: 'white',
+                                boxShadow: '0 4px 16px rgba(0,80,200,0.28)',
+                              }
+                            : {
+                                background: '#101D30',
+                                color: '#CDD6E3',
+                                border: '1px solid rgba(255,255,255,0.07)',
+                              }
+                        }
+                      >
+                        {renderContent(cleanText)}
+                      </div>
+                      <span className="text-[10px] px-1" style={{ color: 'rgba(71,85,105,0.9)' }}>
+                        {fmt(msg.ts)}
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-[10px] px-1" style={{ color: 'rgba(71,85,105,0.9)' }}>
-                    {fmt(msg.ts)}
-                  </span>
+
+                  {/* Product cards */}
+                  {cards.length > 0 && (
+                    <div className="mt-2 ml-9 flex flex-col gap-2">
+                      {cards.map((card, ci) => (
+                        <div
+                          key={ci}
+                          className="rounded-2xl px-3 py-2.5 flex flex-col gap-2"
+                          style={{
+                            background: '#0D1B2E',
+                            border: '1px solid rgba(0,150,220,0.2)',
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-white font-semibold text-xs leading-tight truncate">
+                                {card.name ?? card.ref}
+                              </p>
+                              <p className="text-[10px] mt-0.5" style={{ color: 'rgba(148,163,184,0.7)' }}>
+                                Ref: {card.ref}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <span
+                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                style={{ background: stockColor(card.stock) }}
+                              />
+                              <span
+                                className="text-[10px] font-medium"
+                                style={{ color: stockColor(card.stock) }}
+                              >
+                                {stockLabel(card.stock)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <a
+                              href={card.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl transition-all duration-200"
+                              style={{
+                                background: 'rgba(0,100,200,0.18)',
+                                color: '#60A5FA',
+                                border: '1px solid rgba(0,100,200,0.25)',
+                              }}
+                            >
+                              Ver ficha
+                            </a>
+                            <a
+                              href="https://b2b.esgas.es/carrito"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl transition-all duration-200"
+                              style={{
+                                background: 'rgba(0,180,100,0.15)',
+                                color: '#34D399',
+                                border: '1px solid rgba(0,180,100,0.22)',
+                              }}
+                            >
+                              Ir al carrito
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Quick replies after the initial bot message */}
+                  {msg.id === 'init' && !userHasSpoken && msgIdx === 0 && (
+                    <div className="mt-3 ml-9 flex flex-wrap gap-2">
+                      {QUICK_REPLIES.map((qr) => (
+                        <button
+                          key={qr}
+                          onClick={() => send(qr)}
+                          className="text-[11px] font-medium px-3 py-1.5 rounded-xl transition-all duration-200"
+                          style={{
+                            background: 'rgba(0,80,180,0.15)',
+                            color: '#93C5FD',
+                            border: '1px solid rgba(0,100,200,0.22)',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,80,180,0.28)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,80,180,0.15)';
+                          }}
+                        >
+                          {qr}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {isTyping && (
               <div className="flex gap-2.5 justify-start">
@@ -424,7 +565,6 @@ export default function Chatbot() {
               autoComplete="off"
             />
 
-            {/* Send button */}
             <button
               type="submit"
               disabled={!input.trim() || isTyping}
@@ -448,9 +588,7 @@ export default function Chatbot() {
         </div>
       </div>
 
-      {/* ──────────────────────────────────────────
-          MINI ROBOT FAB  (idéntico al LeanRobot)
-      ────────────────────────────────────────── */}
+      {/* ── MINI ROBOT FAB ── */}
       <div className="relative flex flex-col items-center">
 
         {/* Tooltip burbuja */}
@@ -498,7 +636,6 @@ export default function Chatbot() {
         >
           <FabRobot dimmed={isOpen} />
 
-          {/* CTA bar — igual al LeanRobot, oculta cuando el chat está abierto */}
           <div
             className="text-white rounded-2xl font-extrabold text-[11px] tracking-wide relative z-10 text-center uppercase border border-white/20 transition-all duration-300"
             style={{

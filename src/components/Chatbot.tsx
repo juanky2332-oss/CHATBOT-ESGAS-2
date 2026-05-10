@@ -5,17 +5,11 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 const WEBHOOK_URL =
   'https://paneln8n.transformaconia.com/webhook/031ab1e6-d64e-41f0-b03e-f5c0681a6491';
 
-const QUICK_REPLIES = [
-  '¿Tenéis el rodamiento 6204 EE?',
-  '¿Cuánto tarda un pedido?',
-  'Busco soporte UCF 205',
-  '¿Tenéis rodamientos inoxidables?',
-];
-
 type Message = {
   id: string;
   role: 'user' | 'bot';
   content: string;
+  imageUrl?: string;
   ts: Date;
 };
 
@@ -48,7 +42,6 @@ function stockColor(stock?: number): string {
 function stockLabel(stock?: number): string {
   if (stock === undefined || stock < 0) return 'Ver catálogo';
   if (stock === 0) return 'Sin stock';
-  if (stock <= 10) return `${stock} uds`;
   return `${stock} uds`;
 }
 
@@ -87,6 +80,43 @@ function renderContent(text: string) {
         <span dangerouslySetInnerHTML={{ __html: html }} />
       </span>
     );
+  });
+}
+
+/* Compress image to max 1024px and ~80% quality */
+function compressImage(file: File): Promise<{ base64: string; dataUrl: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      img.src = e.target?.result as string;
+    };
+    img.onload = () => {
+      const MAX = 1024;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width >= height) {
+          height = Math.round((height * MAX) / width);
+          width = MAX;
+        } else {
+          width = Math.round((width * MAX) / height);
+          height = MAX;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context error'));
+      ctx.drawImage(img, 0, 0, width, height);
+      const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const dataUrl = canvas.toDataURL(mimeType, 0.82);
+      const base64 = dataUrl.split(',')[1];
+      resolve({ base64, dataUrl, mimeType });
+    };
+    img.onerror = reject;
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
 }
 
@@ -163,7 +193,7 @@ export default function Chatbot() {
     {
       id: 'init',
       role: 'bot',
-      content: 'Soy tu asistente de ESGAS. ¿En qué puedo ayudarte?',
+      content: 'Soy tu asistente de ESGAS. ¿En qué puedo ayudarte? Puedes escribirme o enviarme una foto del artículo que necesitas identificar.',
       ts: new Date(),
     },
   ]);
@@ -171,6 +201,7 @@ export default function Chatbot() {
   const [isTyping, setIsTyping] = useState(false);
   const [hasNew, setHasNew] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{ base64: string; dataUrl: string; mimeType: string } | null>(null);
 
   const [sessionId] = useState<string>(() => {
     if (typeof window === 'undefined') return `s-${Date.now()}`;
@@ -183,8 +214,7 @@ export default function Chatbot() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const userHasSpoken = messages.some((m) => m.role === 'user');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const open = () => { setIsOpen(true); setHasNew(false); setShowTooltip(false); };
@@ -207,23 +237,50 @@ export default function Chatbot() {
     }
   }, [isOpen, messages.length]);
 
-  const send = useCallback(
-    async (text: string) => {
-      const t = text.trim();
-      if (!t || isTyping) return;
+  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    try {
+      const compressed = await compressImage(file);
+      setPendingImage(compressed);
+    } catch {
+      // silently ignore image errors
+    }
+  }, []);
 
-      setMessages((p) => [
-        ...p,
-        { id: `u${Date.now()}`, role: 'user', content: t, ts: new Date() },
-      ]);
+  const send = useCallback(
+    async (text: string, imageData?: { base64: string; dataUrl: string; mimeType: string } | null) => {
+      const t = text.trim();
+      const img = imageData ?? pendingImage;
+      if ((!t && !img) || isTyping) return;
+
+      const userMsg: Message = {
+        id: `u${Date.now()}`,
+        role: 'user',
+        content: t || (img ? '📷 Imagen enviada para identificar el artículo.' : ''),
+        imageUrl: img?.dataUrl,
+        ts: new Date(),
+      };
+
+      setMessages((p) => [...p, userMsg]);
       setInput('');
+      setPendingImage(null);
       setIsTyping(true);
 
       try {
+        const body: Record<string, string> = { sessionId };
+        if (t) body.message = t;
+        if (img) {
+          body.image = img.base64;
+          body.imageType = img.mimeType;
+          if (!t) body.message = 'Identifica el artículo de la imagen. Si lo reconoces, dame todos los detalles del producto. Si tienes dudas, pregúntame solo lo necesario para poder identificarlo correctamente.';
+        }
+
         const res = await fetch(WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: t, sessionId }),
+          body: JSON.stringify(body),
         });
         const data = await res.json();
         const reply =
@@ -247,7 +304,7 @@ export default function Chatbot() {
         setIsTyping(false);
       }
     },
-    [isTyping, sessionId, isOpen],
+    [isTyping, sessionId, isOpen, pendingImage],
   );
 
   const fmt = (d: Date) =>
@@ -353,7 +410,7 @@ export default function Chatbot() {
 
           {/* ── Messages ── */}
           <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
-            {messages.map((msg, msgIdx) => {
+            {messages.map((msg) => {
               const { text: cleanText, cards } = msg.role === 'bot'
                 ? parseProductCards(msg.content)
                 : { text: msg.content, cards: [] };
@@ -372,7 +429,7 @@ export default function Chatbot() {
                         }}
                       >
                         <svg viewBox="0 0 24 24" width={13} height={13} fill="white">
-                          <path d="M12 2a2 2 0 0 1 2 2 2 2 0 0 1-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2M7 14a5 5 0 0 0 10 0m-9 6v-2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2z" />
+                          <path d="M12 2a2 2 0 0 1 2 2 2 2 0 0 1-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2" />
                         </svg>
                       </div>
                     )}
@@ -382,26 +439,50 @@ export default function Chatbot() {
                         msg.role === 'user' ? 'items-end' : 'items-start'
                       }`}
                     >
-                      <div
-                        className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                          msg.role === 'user' ? 'rounded-br-sm' : 'rounded-bl-sm'
-                        }`}
-                        style={
-                          msg.role === 'user'
-                            ? {
-                                background: 'linear-gradient(135deg, #0047C8, #0078B8)',
-                                color: 'white',
-                                boxShadow: '0 4px 16px rgba(0,80,200,0.28)',
-                              }
-                            : {
-                                background: '#101D30',
-                                color: '#CDD6E3',
-                                border: '1px solid rgba(255,255,255,0.07)',
-                              }
-                        }
-                      >
-                        {renderContent(cleanText)}
-                      </div>
+                      {/* Image in message */}
+                      {msg.imageUrl && (
+                        <div
+                          className="rounded-2xl overflow-hidden"
+                          style={{
+                            border: msg.role === 'user'
+                              ? '2px solid rgba(0,100,200,0.4)'
+                              : '2px solid rgba(255,255,255,0.08)',
+                            maxWidth: '220px',
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={msg.imageUrl}
+                            alt="Imagen enviada"
+                            style={{ display: 'block', width: '100%', maxHeight: '180px', objectFit: 'cover' }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Text bubble (only if there's text content) */}
+                      {cleanText && (
+                        <div
+                          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                            msg.role === 'user' ? 'rounded-br-sm' : 'rounded-bl-sm'
+                          }`}
+                          style={
+                            msg.role === 'user'
+                              ? {
+                                  background: 'linear-gradient(135deg, #0047C8, #0078B8)',
+                                  color: 'white',
+                                  boxShadow: '0 4px 16px rgba(0,80,200,0.28)',
+                                }
+                              : {
+                                  background: '#101D30',
+                                  color: '#CDD6E3',
+                                  border: '1px solid rgba(255,255,255,0.07)',
+                                }
+                          }
+                        >
+                          {renderContent(cleanText)}
+                        </div>
+                      )}
+
                       <span className="text-[10px] px-1" style={{ color: 'rgba(71,85,105,0.9)' }}>
                         {fmt(msg.ts)}
                       </span>
@@ -474,32 +555,6 @@ export default function Chatbot() {
                       ))}
                     </div>
                   )}
-
-                  {/* Quick replies after the initial bot message */}
-                  {msg.id === 'init' && !userHasSpoken && msgIdx === 0 && (
-                    <div className="mt-3 ml-9 flex flex-wrap gap-2">
-                      {QUICK_REPLIES.map((qr) => (
-                        <button
-                          key={qr}
-                          onClick={() => send(qr)}
-                          className="text-[11px] font-medium px-3 py-1.5 rounded-xl transition-all duration-200"
-                          style={{
-                            background: 'rgba(0,80,180,0.15)',
-                            color: '#93C5FD',
-                            border: '1px solid rgba(0,100,200,0.22)',
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,80,180,0.28)';
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,80,180,0.15)';
-                          }}
-                        >
-                          {qr}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -529,24 +584,110 @@ export default function Chatbot() {
             <div ref={bottomRef} />
           </div>
 
+          {/* ── Pending image preview ── */}
+          {pendingImage && (
+            <div
+              className="flex-shrink-0 px-4 pb-2 flex items-end gap-2"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+            >
+              <div className="relative inline-block mt-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={pendingImage.dataUrl}
+                  alt="Vista previa"
+                  style={{
+                    width: '72px',
+                    height: '72px',
+                    objectFit: 'cover',
+                    borderRadius: '12px',
+                    border: '2px solid rgba(0,150,220,0.4)',
+                    display: 'block',
+                  }}
+                />
+                <button
+                  onClick={() => setPendingImage(null)}
+                  aria-label="Eliminar imagen"
+                  style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    right: '-8px',
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    background: '#EF4444',
+                    border: '2px solid #09131F',
+                    color: 'white',
+                    fontSize: '11px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    lineHeight: 1,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-[11px] mb-1" style={{ color: 'rgba(148,163,184,0.7)' }}>
+                Imagen lista. Escribe un comentario o envía directamente.
+              </p>
+            </div>
+          )}
+
           {/* ── Input ── */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               send(input);
             }}
-            className="flex gap-2.5 items-center px-4 py-3.5 flex-shrink-0"
+            className="flex gap-2 items-center px-4 py-3.5 flex-shrink-0"
             style={{
               background: '#06101C',
               borderTop: '1px solid rgba(255,255,255,0.05)',
             }}
           >
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: 'none' }}
+              onChange={handleImageSelect}
+            />
+
+            {/* Camera button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isTyping}
+              aria-label="Enviar foto"
+              className="flex items-center justify-center flex-shrink-0 transition-all duration-200 disabled:opacity-30"
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '14px',
+                background: pendingImage
+                  ? 'linear-gradient(135deg, #0078B8, #00C2E0)'
+                  : 'rgba(255,255,255,0.05)',
+                border: pendingImage
+                  ? 'none'
+                  : '1px solid rgba(255,255,255,0.08)',
+                boxShadow: pendingImage ? '0 4px 14px rgba(0,150,220,0.4)' : 'none',
+              }}
+            >
+              <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke={pendingImage ? 'white' : 'rgba(148,163,184,0.85)'} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </button>
+
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Escribe tu consulta…"
+              placeholder={pendingImage ? 'Añade un comentario (opcional)…' : 'Escribe tu consulta…'}
               className="flex-1 rounded-2xl px-4 py-3 text-sm outline-none transition-all min-w-0"
               style={{
                 background: '#101D30',
@@ -567,14 +708,14 @@ export default function Chatbot() {
 
             <button
               type="submit"
-              disabled={!input.trim() || isTyping}
+              disabled={(!input.trim() && !pendingImage) || isTyping}
               className="flex items-center justify-center flex-shrink-0 transition-all duration-200 disabled:opacity-30"
               style={{
                 width: '44px',
                 height: '44px',
                 borderRadius: '14px',
                 background: 'linear-gradient(135deg, #0047C8, #0092C2)',
-                boxShadow: input.trim()
+                boxShadow: (input.trim() || pendingImage)
                   ? '0 4px 18px rgba(0,80,200,0.45)'
                   : 'none',
               }}

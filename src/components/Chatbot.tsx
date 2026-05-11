@@ -120,72 +120,13 @@ function compressImage(file: File): Promise<{ base64: string; dataUrl: string; m
   });
 }
 
-/* ── Mini robot SVG ── */
-function FabRobot({ dimmed }: { dimmed?: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 200 135"
-      width="108"
-      height="73"
-      style={{
-        overflow: 'visible',
-        opacity: dimmed ? 0.55 : 1,
-        transition: 'opacity 0.3s',
-        filter: dimmed
-          ? 'drop-shadow(0 4px 10px rgba(0,60,150,0.25))'
-          : 'drop-shadow(0 10px 28px rgba(0,80,200,0.45))',
-      }}
-    >
-      <defs>
-        <linearGradient id="fabGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#FFFFFF" />
-          <stop offset="100%" stopColor="#CBD5E1" />
-        </linearGradient>
-        <filter id="fabShadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
-          <feOffset dx="0" dy="2" result="offsetblur" />
-          <feComponentTransfer>
-            <feFuncA type="linear" slope="0.3" />
-          </feComponentTransfer>
-          <feMerge>
-            <feMergeNode />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
+const SYSTEM_CONTEXT = `Eres el asistente de ESGAS, especialista en rodamientos y transmisión NTN/SNR.
 
-      {/* Body */}
-      <rect x="75" y="80" width="50" height="30" rx="10" fill="#CBD5E1" />
-
-      {/* Arms */}
-      <path d="M50 70 Q30 70 35 110" stroke="url(#fabGrad)" strokeWidth="18" strokeLinecap="round" fill="none" />
-      <path d="M150 70 Q170 70 165 110" stroke="url(#fabGrad)" strokeWidth="18" strokeLinecap="round" fill="none" />
-
-      {/* Head */}
-      <rect x="45" y="5" width="110" height="90" rx="45" fill="url(#fabGrad)" />
-      <rect x="55" y="20" width="90" height="50" rx="22" fill="#0F172A" />
-
-      {/* Eyes (pulsing cyan) */}
-      <g style={{ animation: 'blinkEyesOnly 4s infinite', transformOrigin: 'center 45px' }}>
-        <circle cx="82" cy="45" r="9" className="fab-eye-l" />
-        <circle cx="118" cy="45" r="9" className="fab-eye-r" />
-        <circle cx="85" cy="42" r="3" fill="white" fillOpacity="0.82" />
-        <circle cx="121" cy="42" r="3" fill="white" fillOpacity="0.82" />
-      </g>
-
-      {/* Smile */}
-      <path d="M90 60 Q100 66 110 60" fill="none" stroke="#00D1FF" strokeWidth="2" strokeLinecap="round" opacity="0.65" />
-
-      {/* Antenna */}
-      <line x1="100" y1="5" x2="100" y2="-8" stroke="#94A3B8" strokeWidth="4" />
-      <circle cx="100" cy="-8" r="5" className="fab-antenna" />
-
-      {/* Hands */}
-      <rect x="25" y="105" width="45" height="15" rx="7" fill="#94A3B8" filter="url(#fabShadow)" />
-      <rect x="130" y="105" width="45" height="15" rx="7" fill="#94A3B8" filter="url(#fabShadow)" />
-    </svg>
-  );
-}
+INSTRUCCIONES:
+1. SUFIJOS: Cuando menciones una referencia con sufijos, añade una breve explicación entre paréntesis: LLU = sello de contacto con grasa, 2RS = doble sello de caucho, ZZ = doble tapa metálica, C3 = juego radial ampliado.
+2. DISPONIBILIDAD: NUNCA digas que no tienes un producto o que no lo puedes conseguir. Una cosa es el stock en este momento y otra la disponibilidad. Si no hay stock, informa de que el plazo de entrega habitual es de 1-2 días laborables y ofrece gestionar el pedido.
+3. MARCAS EQUIVALENTES: Si el cliente solicita una marca que no comercializas, ofrece el equivalente NTN/SNR con las mismas prestaciones técnicas, siendo transparente sobre la marca pero destacando las ventajas. No inventes equivalencias que no puedas garantizar.
+4. CATÁLOGO PRESTASHOP: Tienes acceso al catálogo y stock en tiempo real. Consulta y responde con datos concretos de referencia, precio y disponibilidad.`;
 
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
@@ -193,7 +134,7 @@ export default function Chatbot() {
     {
       id: 'init',
       role: 'bot',
-      content: 'Soy tu asistente de ESGAS. ¿En qué puedo ayudarte? Puedes escribirme o enviarme una foto del artículo que necesitas identificar.',
+      content: '¡Hola! ¿En qué puedo ayudarte hoy?',
       ts: new Date(),
     },
   ]);
@@ -269,7 +210,7 @@ export default function Chatbot() {
       setIsTyping(true);
 
       try {
-        const body: Record<string, string> = { sessionId };
+        const body: Record<string, string> = { sessionId, context: SYSTEM_CONTEXT };
         if (t) body.message = t;
         if (img) {
           body.image = img.base64;
@@ -729,17 +670,14 @@ export default function Chatbot() {
         </div>
       </div>
 
-      {/* ── MINI ROBOT FAB ── */}
-      <div className="relative flex flex-col items-center">
+      {/* ── FAB ── */}
+      <div className="flex flex-col items-end" style={{ gap: '6px' }}>
 
         {/* Tooltip burbuja */}
         {showTooltip && !isOpen && (
           <div
-            className="absolute right-0 pointer-events-none select-none"
-            style={{
-              bottom: 'calc(100% + 10px)',
-              animation: 'esgas-fadein 0.4s ease forwards',
-            }}
+            className="pointer-events-none select-none"
+            style={{ animation: 'esgas-fadein 0.4s ease forwards' }}
           >
             <div
               className="text-xs font-semibold text-white px-4 py-2.5 rounded-2xl rounded-br-sm whitespace-nowrap relative"
@@ -757,44 +695,78 @@ export default function Chatbot() {
           </div>
         )}
 
-        {/* Notificación mensaje nuevo */}
-        {hasNew && !isOpen && (
-          <span
-            className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
-            style={{ background: '#EF4444', border: '2px solid #050B18' }}
-          >
-            1
-          </span>
-        )}
+        {/* Botón circular */}
+        <div className="relative self-end">
+          {/* Notificación */}
+          {hasNew && !isOpen && (
+            <span
+              className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+              style={{ background: '#EF4444', border: '2px solid #050B18' }}
+            >
+              1
+            </span>
+          )}
 
-        {/* Robot + CTA bar */}
-        <div
-          className="cursor-pointer flex flex-col items-center"
-          onClick={toggleOpen}
-          style={{
-            animation: isOpen ? 'none' : 'leanFloat 3.5s ease-in-out infinite',
-          }}
-        >
-          <FabRobot dimmed={isOpen} />
+          {/* Anillo de pulso */}
+          {!isOpen && (
+            <span
+              className="absolute rounded-full pointer-events-none"
+              style={{
+                inset: '-5px',
+                border: '2px solid rgba(0,150,220,0.45)',
+                animation: 'esgas-pulse 2.5s ease-in-out infinite',
+              }}
+            />
+          )}
 
-          <div
-            className="text-white rounded-2xl font-extrabold text-[11px] tracking-wide relative z-10 text-center uppercase border border-white/20 transition-all duration-300"
+          <button
+            onClick={toggleOpen}
+            aria-label={isOpen ? 'Cerrar chat' : 'Abrir chat'}
             style={{
-              background: 'linear-gradient(to right, #00D1FF, #0070FF)',
-              boxShadow: '0 8px 20px rgba(0,209,255,0.38)',
-              marginTop: '-14px',
-              padding: '10px 20px',
-              opacity: isOpen ? 0 : 1,
-              transform: isOpen ? 'scaleY(0.7) translateY(-4px)' : 'scaleY(1)',
-              pointerEvents: isOpen ? 'none' : 'auto',
+              width: '60px',
+              height: '60px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #0047C8, #0092C2)',
+              boxShadow: isOpen
+                ? '0 4px 16px rgba(0,80,200,0.3)'
+                : '0 8px 28px rgba(0,80,200,0.55)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+              animation: isOpen ? 'none' : 'leanFloat 3.5s ease-in-out infinite',
             }}
           >
-            ¿ALGUNA DUDA? PINCHA AQUÍ
-          </div>
+            {isOpen ? (
+              <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width={26} height={26} fill="white">
+                <path d="M12 2a2 2 0 0 1 2 2 2 2 0 0 1-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2M7 14a5 5 0 0 0 10 0m-9 6v-2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2z" />
+              </svg>
+            )}
+          </button>
         </div>
 
+        {/* Etiqueta CTA */}
+        {!isOpen && (
+          <div
+            className="self-end text-white font-bold text-[10px] tracking-wide uppercase whitespace-nowrap rounded-xl"
+            style={{
+              background: 'linear-gradient(to right, #00D1FF, #0070FF)',
+              padding: '6px 14px',
+              boxShadow: '0 4px 14px rgba(0,150,220,0.38)',
+            }}
+          >
+            ¿Alguna duda?
+          </div>
+        )}
+
         {/* Powered by Flownexion */}
-        <div className="mt-2 text-[9px] font-medium tracking-wide" style={{ color: 'rgba(71,85,105,0.9)' }}>
+        <div className="self-end text-[9px] font-medium tracking-wide" style={{ color: 'rgba(71,85,105,0.9)' }}>
           powered by{' '}
           <a
             href="https://flownexion.com/"
@@ -802,12 +774,8 @@ export default function Chatbot() {
             rel="noopener noreferrer"
             className="underline transition-colors duration-200"
             style={{ color: 'rgba(71,85,105,0.9)' }}
-            onMouseEnter={(e) =>
-              ((e.target as HTMLAnchorElement).style.color = '#00D1FF')
-            }
-            onMouseLeave={(e) =>
-              ((e.target as HTMLAnchorElement).style.color = 'rgba(71,85,105,0.9)')
-            }
+            onMouseEnter={(e) => ((e.target as HTMLAnchorElement).style.color = '#00D1FF')}
+            onMouseLeave={(e) => ((e.target as HTMLAnchorElement).style.color = 'rgba(71,85,105,0.9)')}
           >
             Flownexion
           </a>

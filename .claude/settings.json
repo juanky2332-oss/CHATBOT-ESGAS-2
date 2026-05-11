@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "n8n-esgas": {
+      "type": "http",
+      "url": "https://paneln8n.transformaconia.com/mcp-server/http",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjYTA5YjZiYS1mM2IwLTRmYzAtYjE5OS04OTJmZWU4OWNjODUiLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6Ijg0NDA5ZWU1LTFiODEtNDIzNy1iYzZhLTkzOTY0ZDdkODU1OSIsImlhdCI6MTc3ODQ4OTk3Nn0.ZaRwxGg8TLY53zHAVHYLkI_CjMRoImrOIhNObtK5A10"
+      }
+    }
+  }
+}

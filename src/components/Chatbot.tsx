@@ -342,7 +342,7 @@ export default function Chatbot() {
     {
       id: 'init',
       role: 'bot',
-      content: '¡Hola! ¿En qué puedo ayudarte hoy?',
+      content: '¡Hola! Soy el asesor técnico de ESGAS. Dime qué rodamiento necesitas y te doy precio, stock y plazo al momento.',
       ts: new Date(),
     },
   ]);

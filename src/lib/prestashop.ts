@@ -1,18 +1,21 @@
 const PS_BASE = (process.env.PRESTASHOP_URL ?? 'https://esgas.nodoflow.com/JuanCarlos').replace(/\/$/, '');
 const PS_KEY = process.env.PRESTASHOP_API_KEY ?? '';
 
-export const PS_STORE_BASE = PS_BASE;
+export const PS_STORE_URL = PS_BASE;
 
-export function psSearchUrl(ref: string) {
-  return `${PS_BASE}/index.php?controller=search&s=${encodeURIComponent(ref)}`;
-}
-
+// Product page — only valid when we have the real product ID from the API
 export function psProductUrl(id: number) {
   return `${PS_BASE}/index.php?id_product=${id}&controller=product`;
 }
 
+// Cart / checkout page
 export function psCartUrl() {
   return `${PS_BASE}/index.php?controller=order`;
+}
+
+// Shop homepage — safe fallback when no product ID available
+export function psHomeUrl() {
+  return `${PS_BASE}/`;
 }
 
 function psAuth(): Record<string, string> {
@@ -27,7 +30,6 @@ export interface PSProduct {
   price: number;
   stock: number;
   productUrl: string;
-  searchUrl: string;
 }
 
 function extractLangValue(field: unknown): string {
@@ -67,7 +69,6 @@ async function enrichProduct(p: {
     price: parseFloat(p.price) || 0,
     stock,
     productUrl: psProductUrl(p.id),
-    searchUrl: psSearchUrl(p.reference),
   };
 }
 
@@ -113,16 +114,10 @@ export async function psCreateCart(
       </cart_row>`
       )
       .join('\n');
-
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <cart>
-    <id_currency>1</id_currency>
-    <id_lang>1</id_lang>
-    <cart_rows>${rows}</cart_rows>
-  </cart>
+  <cart><id_currency>1</id_currency><id_lang>1</id_lang><cart_rows>${rows}</cart_rows></cart>
 </prestashop>`;
-
     const res = await fetch(`${PS_BASE}/api/carts`, {
       method: 'POST',
       headers: { ...psAuth(), 'Content-Type': 'application/xml', Accept: 'application/json' },

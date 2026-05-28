@@ -6,11 +6,11 @@ const WEBHOOK_URL =
   'https://paneln8n.transformaconia.com/webhook/031ab1e6-d64e-41f0-b03e-f5c0681a6491';
 
 const PS_BASE = 'https://esgas.nodoflow.com/JuanCarlos';
-const psSearch = (ref: string) =>
-  `${PS_BASE}/index.php?controller=search&s=${encodeURIComponent(ref)}`;
-const psProduct = (id: number) =>
-  `${PS_BASE}/index.php?id_product=${id}&controller=product`;
-const psCart = () => `${PS_BASE}/index.php?controller=order`;
+// IMPORTANT: Never use controller=search — blocked by PS8 security.
+// Only use id_product URLs (from API) or the homepage.
+const PS_HOME = `${PS_BASE}/`;
+const psProductUrl = (id: number) => `${PS_BASE}/index.php?id_product=${id}&controller=product`;
+const psCartUrl = () => `${PS_BASE}/index.php?controller=order`;
 
 type Message = {
   id: string;
@@ -35,7 +35,6 @@ interface PSData {
   price: number;
   stock: number;
   productUrl: string;
-  searchUrl: string;
 }
 
 type CartItem = {
@@ -64,9 +63,8 @@ function stockColor(stock?: number): string {
   if (stock <= 10) return '#F59E0B';
   return '#10B981';
 }
-
 function stockLabel(stock?: number): string {
-  if (stock === undefined || stock < 0) return 'Ver catálogo';
+  if (stock === undefined || stock < 0) return 'Consultar';
   if (stock === 0) return 'Sin stock';
   return `${stock} uds`;
 }
@@ -86,8 +84,7 @@ function renderContent(text: string) {
   return text.split('\n').map((line, i) => {
     const html = line
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`(.*?)`/g,
-        '<code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-size:0.85em">$1</code>')
+      .replace(/`(.*?)`/g, '<code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-size:0.85em">$1</code>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
         '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#00C2E0;text-decoration:underline;text-underline-offset:2px">$1</a>');
     return (<span key={i}>{i > 0 && <br />}<span dangerouslySetInnerHTML={{ __html: html }} /></span>);
@@ -115,15 +112,15 @@ function compressImage(file: File): Promise<{ base64: string; dataUrl: string; m
       const dataUrl = canvas.toDataURL(mimeType, 0.82);
       resolve({ base64: dataUrl.split(',')[1], dataUrl, mimeType });
     };
-    img.onerror = reject;
-    reader.onerror = reject;
+    img.onerror = reject; reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
 
 function FabRobot({ dimmed }: { dimmed?: boolean }) {
   return (
-    <svg viewBox="0 0 200 135" width="108" height="73" style={{ overflow: 'visible', opacity: dimmed ? 0.55 : 1, transition: 'opacity 0.3s', filter: dimmed ? 'drop-shadow(0 4px 10px rgba(0,60,150,0.25))' : 'drop-shadow(0 10px 28px rgba(0,80,200,0.45))' }}>
+    <svg viewBox="0 0 200 135" width="108" height="73"
+      style={{ overflow: 'visible', opacity: dimmed ? 0.55 : 1, transition: 'opacity 0.3s', filter: dimmed ? 'drop-shadow(0 4px 10px rgba(0,60,150,0.25))' : 'drop-shadow(0 10px 28px rgba(0,80,200,0.45))' }}>
       <defs>
         <linearGradient id="fabGrad" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#FFFFFF" /><stop offset="100%" stopColor="#CBD5E1" />
@@ -173,29 +170,30 @@ function BotAvatar({ size = 28 }: { size?: number }) {
 
 const SYSTEM_OVERRIDE = `[INSTRUCCIONES DEL SISTEMA — PRIORIDAD MÁXIMA]
 
-Eres el asesor técnico de ESGAS, distribuidor oficial NTN/SNR. El sistema está conectado al PrestaShop real de ESGAS (esgas.nodoflow.com/JuanCarlos).
+Eres el asesor técnico de ESGAS, distribuidor oficial NTN/SNR. Sistema conectado al PrestaShop real (esgas.nodoflow.com/JuanCarlos).
 
 🎯 TU MISIÓN: asesoramiento técnico experto + confirmar referencias + guiar al pedido.
 
-📦 FORMATO OBLIGATORIO — incluye SIEMPRE al final para cualquier producto:
+📦 FORMATO OBLIGATORIO al final para cualquier producto:
 
 \`\`\`products
-[{"ref":"REFERENCIA_EXACTA","name":"Nombre","url":"${PS_BASE}/index.php?controller=search&s=REFERENCIA"}]
+[{"ref":"REFERENCIA_EXACTA","name":"Nombre","url":"${PS_HOME}"}]
 \`\`\`
 
-🚫 PROHIBIDO: inventar precios/stock, "sin stock", "catálogo simulado", dar teléfonos.
-✅ ESTILO: directo, profesional. Cierra con "¿Confirmas cantidad para tramitar el pedido?"
+NOTA: El frontend sustituirá la URL con la ficha real del producto desde la API de PrestaShop.
 
-SUFIJOS: 2RS/LLU=sello caucho · ZZ=tapas metal · C3=juego ampliado · NR=ranura · M=jaula latón
-COMPETENCIA SKF/FAG/NSK → equivalente NTN/SNR exacto
+🚫 PROHIBIDO: inventar precios/stock exactos, "sin stock", "catálogo simulado", dar teléfonos.
+✅ ESTILO: directo, profesional. Cierra con "¿Confirmas cantidad para tramitar el pedido?"
+SUFIJOS: 2RS/LLU=sello caucho | ZZ=tapas metal | C3=juego ampliado | NR=ranura | M=jaula latón
+COMPETENCIA SKF/FAG/NSK/TIMKEN → equivalente NTN/SNR exacto
 
 [CONSULTA DEL CLIENTE]:`;
 
 function isBadResponse(text: string): boolean {
   const lower = text.toLowerCase();
   return ['no he encontrado','no se ha encontrado','no tenemos','no está disponible',
-    'no encontré','catálogo simulado','catalogo simulado','agotado',
-    'no aparece','consulte por teléfono','llamar al','llame al','fuera de catálogo',
+    'no encontré','catálogo simulado','agotado','no aparece',
+    'consulte por teléfono','llamar al','llame al','fuera de catálogo',
   ].some((p) => lower.includes(p));
 }
 
@@ -241,11 +239,6 @@ function buildFallbackResponse(userText: string): string {
   return `**${ref}** — Rodamiento rígido de bolas NTN/SNR${suffix}\n\n📦 **Stock:** ${stock} unidades disponibles\n💶 **Precio:** ${price.toFixed(2)} €/ud. (IVA no incluido)\n🚚 **Plazo:** Envío en 24-48 h\n\n¿Confirmo ${qtyClause}? Puedo preparar el pedido ahora mismo.`;
 }
 
-interface PSSearchResult {
-  products: PSData[];
-  searchUrl: string;
-}
-
 async function fetchPSProducts(queries: string[]): Promise<Map<string, PSData>> {
   const map = new Map<string, PSData>();
   const unique = [...new Set(queries.filter(Boolean).map((q) => q.trim()))];
@@ -254,7 +247,7 @@ async function fetchPSProducts(queries: string[]): Promise<Map<string, PSData>> 
       try {
         const res = await fetch(`/api/prestashop/search?q=${encodeURIComponent(q)}`);
         if (!res.ok) return;
-        const data: PSSearchResult = await res.json();
+        const data = await res.json() as { products?: PSData[] };
         (data.products ?? []).forEach((p) => map.set(p.reference.toUpperCase(), p));
       } catch { /* PS no configurado, usa fallback */ }
     })
@@ -316,25 +309,20 @@ export default function Chatbot() {
     try { setPendingImage(await compressImage(file)); } catch { /* ignore */ }
   }, []);
 
-  // Opens product page in PrestaShop (best UX: user adds to cart directly in PS storefront)
   const handleGoToProduct = useCallback((card: ProductCard) => {
     const ps = psCache.get(card.ref.toUpperCase());
-    if (ps) {
-      window.open(ps.productUrl, '_blank');
-    } else {
-      window.open(psSearch(card.ref), '_blank');
-    }
-    // Track in local cart for summary display
+    // Only navigate if we have a real product ID from the PS API
+    const url = ps ? ps.productUrl : PS_HOME;
+    window.open(url, '_blank');
     setCart((prev) => {
       const key = card.ref.toUpperCase();
       if (prev.find((i) => i.ref === key)) return prev;
-      const ps2 = psCache.get(key);
       return [...prev, {
-        psId: ps2?.id ?? 0,
+        psId: ps?.id ?? 0,
         ref: card.ref,
-        name: ps2?.name ?? card.name ?? card.ref,
+        name: ps?.name ?? card.name ?? card.ref,
         qty: 1,
-        price: ps2?.price ?? card.price ?? 0,
+        price: ps?.price ?? card.price ?? 0,
       }];
     });
   }, [psCache]);
@@ -359,15 +347,11 @@ export default function Chatbot() {
 
       try {
         const userQuery = t || 'Identifica este artículo de la imagen, dame referencia exacta y botón de compra.';
-
         const userRef = extractReference(t);
         const psQueries = [t, userRef].filter((x): x is string => Boolean(x?.trim()));
-        const psPromise = psQueries.length > 0
-          ? fetchPSProducts(psQueries)
-          : Promise.resolve(new Map<string, PSData>());
+        const psPromise = psQueries.length > 0 ? fetchPSProducts(psQueries) : Promise.resolve(new Map<string, PSData>());
 
-        const augmentedMessage = `${SYSTEM_OVERRIDE}\n${userQuery}`;
-        const body: Record<string, string> = { sessionId, message: augmentedMessage };
+        const body: Record<string, string> = { sessionId, message: `${SYSTEM_OVERRIDE}\n${userQuery}` };
         if (img) { body.image = img.base64; body.imageType = img.mimeType; }
 
         const [psNewData, res] = await Promise.all([
@@ -402,8 +386,7 @@ export default function Chatbot() {
   const fmt = (d: Date) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   const toggleOpen = () => {
     const opening = !isOpen;
-    setIsOpen(opening);
-    setHasNew(false);
+    setIsOpen(opening); setHasNew(false);
     if (opening) { setShowTooltip(false); localStorage.setItem('esgas-tooltip-seen', '1'); }
   };
 
@@ -414,7 +397,6 @@ export default function Chatbot() {
     <div className="fixed bottom-4 right-4 z-[999999] flex flex-col items-end"
       style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', gap: '10px' }}>
 
-      {/* ── CHAT PANEL ── */}
       <div style={{ width: 'min(420px, calc(100vw - 24px))', height: 'min(600px, calc(100dvh - 210px))', transition: 'opacity 0.35s ease, transform 0.45s cubic-bezier(0.34,1.56,0.64,1)', opacity: isOpen ? 1 : 0, transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.93) translateY(12px)', pointerEvents: isOpen ? 'all' : 'none' }}>
         <div className="w-full h-full flex flex-col rounded-3xl overflow-hidden"
           style={{ background: '#09131F', boxShadow: '0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)' }}>
@@ -430,9 +412,8 @@ export default function Chatbot() {
                 <span className="text-[11px]" style={{ color: 'rgba(148,163,184,0.85)' }}>Disponible · PrestaShop en tiempo real</span>
               </div>
             </div>
-
             {cartTotalItems > 0 && (
-              <a href={psCart()} target="_blank" rel="noopener noreferrer"
+              <a href={psCartUrl()} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
                 style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.25)', textDecoration: 'none' }}
                 title="Ver carrito en PrestaShop">
@@ -443,15 +424,12 @@ export default function Chatbot() {
                 <span className="text-[11px] font-bold" style={{ color: '#34D399' }}>{cartTotalItems}</span>
               </a>
             )}
-
             <button onClick={toggleOpen} className="flex items-center justify-center rounded-xl transition-all duration-200"
               style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
               onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.09)')}
               onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)')}
-              aria-label="Minimizar chat">
-              <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="rgba(148,163,184,1)" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
+              aria-label="Minimizar">
+              <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="rgba(148,163,184,1)" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
             </button>
           </div>
 
@@ -484,7 +462,6 @@ export default function Chatbot() {
                     </div>
                   </div>
 
-                  {/* Product cards */}
                   {cards.length > 0 && (
                     <div className="mt-2 ml-9 flex flex-col gap-2">
                       {cards.map((card, ci) => {
@@ -492,7 +469,8 @@ export default function Chatbot() {
                         const realStock = ps !== undefined ? ps.stock : card.stock;
                         const realPrice = ps?.price ?? card.price;
                         const realName = ps?.name ?? card.name ?? card.ref;
-                        const productPageUrl = ps ? ps.productUrl : psSearch(card.ref);
+                        // Only use productUrl when we have a real PS product ID
+                        const productUrl = ps ? psProductUrl(ps.id) : null;
                         const inCart = cart.find((i) => i.ref === card.ref.toUpperCase());
                         return (
                           <div key={ci} className="rounded-2xl px-3 py-2.5 flex flex-col gap-2"
@@ -502,7 +480,10 @@ export default function Chatbot() {
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <p className="text-white font-semibold text-xs leading-tight truncate">{realName}</p>
-                                  {ps && <span className="text-[8px] px-1 py-0.5 rounded font-bold flex-shrink-0" style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399' }}>LIVE</span>}
+                                  {ps
+                                    ? <span className="text-[8px] px-1 py-0.5 rounded font-bold flex-shrink-0" style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399' }}>LIVE</span>
+                                    : <span className="text-[8px] px-1 py-0.5 rounded font-bold flex-shrink-0" style={{ background: 'rgba(100,116,139,0.2)', color: '#94A3B8' }}>est.</span>
+                                  }
                                 </div>
                                 <p className="text-[10px] mt-0.5" style={{ color: 'rgba(148,163,184,0.7)' }}>Ref: {card.ref}</p>
                               </div>
@@ -514,30 +495,38 @@ export default function Chatbot() {
 
                             {realPrice !== undefined && realPrice > 0 && (
                               <div className="flex items-center justify-between">
-                                <span className="text-sm font-bold" style={{ color: '#60A5FA' }}>
+                                <span className="text-sm font-bold" style={{ color: ps ? '#60A5FA' : '#94A3B8' }}>
                                   {realPrice.toFixed(2)} €
-                                  <span className="text-[10px] font-normal ml-1" style={{ color: 'rgba(148,163,184,0.5)' }}>/ ud. s/IVA</span>
+                                  <span className="text-[10px] font-normal ml-1" style={{ color: 'rgba(148,163,184,0.4)' }}>/ ud. s/IVA{!ps ? ' (est.)' : ''}</span>
                                 </span>
                                 {inCart && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg" style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399' }}>✓ Visto</span>}
                               </div>
                             )}
 
                             <div className="flex gap-2">
-                              <a href={productPageUrl} target="_blank" rel="noopener noreferrer"
-                                className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl"
-                                style={{ background: 'rgba(0,100,200,0.18)', color: '#60A5FA', border: '1px solid rgba(0,100,200,0.25)', textDecoration: 'none' }}>
-                                Ver ficha
-                              </a>
+                              {productUrl ? (
+                                <a href={productUrl} target="_blank" rel="noopener noreferrer"
+                                  className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl"
+                                  style={{ background: 'rgba(0,100,200,0.18)', color: '#60A5FA', border: '1px solid rgba(0,100,200,0.25)', textDecoration: 'none' }}>
+                                  Ver ficha
+                                </a>
+                              ) : (
+                                <a href={PS_HOME} target="_blank" rel="noopener noreferrer"
+                                  className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl"
+                                  style={{ background: 'rgba(0,100,200,0.10)', color: '#64748B', border: '1px solid rgba(0,100,200,0.15)', textDecoration: 'none' }}>
+                                  Ir a la tienda
+                                </a>
+                              )}
                               <button onClick={() => handleGoToProduct(card)}
                                 className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl"
                                 style={{ background: 'rgba(0,180,100,0.18)', color: '#34D399', border: '1px solid rgba(0,180,100,0.25)', cursor: 'pointer' }}>
-                                🛒 Añadir al carrito
+                                {ps ? '🛒 Añadir al carrito' : '🛒 Ver en tienda'}
                               </button>
                             </div>
 
                             {!ps && (
-                              <p className="text-[9px] text-center" style={{ color: 'rgba(148,163,184,0.4)' }}>
-                                Se abre la ficha en PrestaShop para añadir al carrito
+                              <p className="text-[9px] text-center" style={{ color: 'rgba(148,163,184,0.35)' }}>
+                                Datos estimados · Configura el webservice de PS para datos reales
                               </p>
                             )}
                           </div>
@@ -558,21 +547,16 @@ export default function Chatbot() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Cart bar */}
           {cartTotalItems > 0 && (
             <div className="flex-shrink-0 px-4 py-2.5 flex items-center justify-between gap-3"
               style={{ background: '#06101C', borderTop: '1px solid rgba(16,185,129,0.15)' }}>
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold" style={{ color: '#34D399' }}>
-                  🛒 {cartTotalItems} artículo{cartTotalItems !== 1 ? 's' : ''} vistos
+                  🛒 {cartTotalItems} artículo{cartTotalItems !== 1 ? 's' : ''} revisados
                 </p>
-                {cartTotalPrice > 0 && (
-                  <p className="text-[10px]" style={{ color: 'rgba(148,163,184,0.55)' }}>
-                    aprox. {cartTotalPrice.toFixed(2)} € s/IVA
-                  </p>
-                )}
+                {cartTotalPrice > 0 && <p className="text-[10px]" style={{ color: 'rgba(148,163,184,0.5)' }}>aprox. {cartTotalPrice.toFixed(2)} € s/IVA</p>}
               </div>
-              <a href={psCart()} target="_blank" rel="noopener noreferrer"
+              <a href={psCartUrl()} target="_blank" rel="noopener noreferrer"
                 className="text-[11px] font-bold px-3 py-1.5 rounded-xl flex-shrink-0"
                 style={{ background: 'linear-gradient(135deg, #059669, #10B981)', color: 'white', textDecoration: 'none', boxShadow: '0 4px 12px rgba(16,185,129,0.3)' }}>
                 Ir al carrito →
@@ -580,7 +564,6 @@ export default function Chatbot() {
             </div>
           )}
 
-          {/* Pending image */}
           {pendingImage && (
             <div className="flex-shrink-0 px-4 pb-2 flex items-end gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
               <div className="relative inline-block mt-2">
@@ -593,20 +576,17 @@ export default function Chatbot() {
             </div>
           )}
 
-          {/* Input */}
           <form onSubmit={(e) => { e.preventDefault(); send(input); }}
             className="flex gap-2 items-center px-4 py-3.5 flex-shrink-0"
             style={{ background: '#06101C', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
             <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleImageSelect} />
-
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isTyping} aria-label="Enviar foto"
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isTyping} aria-label="Foto"
               className="flex items-center justify-center flex-shrink-0 transition-all duration-200 disabled:opacity-30"
               style={{ width: '44px', height: '44px', borderRadius: '14px', background: pendingImage ? 'linear-gradient(135deg, #0078B8, #00C2E0)' : 'rgba(255,255,255,0.05)', border: pendingImage ? 'none' : '1px solid rgba(255,255,255,0.08)', boxShadow: pendingImage ? '0 4px 14px rgba(0,150,220,0.4)' : 'none' }}>
               <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke={pendingImage ? 'white' : 'rgba(148,163,184,0.85)'} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
               </svg>
             </button>
-
             <input ref={inputRef} type="text" value={input} onChange={(e) => setInput(e.target.value)}
               placeholder={pendingImage ? 'Añade un comentario (opcional)…' : 'Escribe tu consulta…'}
               className="flex-1 rounded-2xl px-4 py-3 text-sm outline-none transition-all min-w-0"
@@ -614,18 +594,16 @@ export default function Chatbot() {
               onFocus={(e) => ((e.target as HTMLInputElement).style.border = '1px solid rgba(0,100,200,0.45)')}
               onBlur={(e) => ((e.target as HTMLInputElement).style.border = '1px solid rgba(255,255,255,0.07)')}
               disabled={isTyping} autoComplete="off" />
-
             <button type="submit" disabled={(!input.trim() && !pendingImage) || isTyping}
               className="flex items-center justify-center flex-shrink-0 transition-all duration-200 disabled:opacity-30"
               style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'linear-gradient(135deg, #0047C8, #0092C2)', boxShadow: (input.trim() || pendingImage) ? '0 4px 18px rgba(0,80,200,0.45)' : 'none' }}
-              aria-label="Enviar mensaje">
+              aria-label="Enviar">
               <svg viewBox="0 0 24 24" width={17} height={17} fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>
             </button>
           </form>
         </div>
       </div>
 
-      {/* FAB */}
       <div className="relative flex flex-col items-center">
         {showTooltip && !isOpen && (
           <div className="absolute right-0 pointer-events-none select-none" style={{ bottom: 'calc(100% + 10px)', animation: 'esgas-fadein 0.4s ease forwards' }}>

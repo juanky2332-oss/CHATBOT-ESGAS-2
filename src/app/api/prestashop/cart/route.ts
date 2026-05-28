@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { psCreateCart } from '@/lib/prestashop';
+import { psCreateCart, psCartUrl } from '@/lib/prestashop';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +8,6 @@ export async function POST(req: NextRequest) {
   const items = body.items;
   if (!items?.length) return NextResponse.json({ error: 'No items' }, { status: 400 });
   const result = await psCreateCart(items);
-  if (!result) return NextResponse.json({ error: 'Cart creation failed' }, { status: 500 });
-  return NextResponse.json(result);
+  // If API cart creation fails, still return the cart URL so user can go to PS
+  return NextResponse.json(result ?? { cartId: null, cartUrl: psCartUrl() });
 }

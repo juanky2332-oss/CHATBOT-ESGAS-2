@@ -1,6 +1,20 @@
 const PS_BASE = (process.env.PRESTASHOP_URL ?? 'https://esgas.nodoflow.com/JuanCarlos').replace(/\/$/, '');
 const PS_KEY = process.env.PRESTASHOP_API_KEY ?? '';
 
+export const PS_STORE_BASE = PS_BASE;
+
+export function psSearchUrl(ref: string) {
+  return `${PS_BASE}/index.php?controller=search&s=${encodeURIComponent(ref)}`;
+}
+
+export function psProductUrl(id: number) {
+  return `${PS_BASE}/index.php?id_product=${id}&controller=product`;
+}
+
+export function psCartUrl() {
+  return `${PS_BASE}/index.php?controller=order`;
+}
+
 function psAuth(): Record<string, string> {
   if (!PS_KEY) return {};
   return { Authorization: `Basic ${Buffer.from(`${PS_KEY}:`).toString('base64')}` };
@@ -13,6 +27,7 @@ export interface PSProduct {
   price: number;
   stock: number;
   productUrl: string;
+  searchUrl: string;
 }
 
 function extractLangValue(field: unknown): string {
@@ -51,7 +66,8 @@ async function enrichProduct(p: {
     reference: p.reference,
     price: parseFloat(p.price) || 0,
     stock,
-    productUrl: `${PS_BASE}/index.php?id_product=${p.id}&controller=product`,
+    productUrl: psProductUrl(p.id),
+    searchUrl: psSearchUrl(p.reference),
   };
 }
 
@@ -116,7 +132,7 @@ export async function psCreateCart(
     const json = (await res.json()) as { cart?: { id: number } };
     const cartId = String(json.cart?.id ?? '');
     if (!cartId) return null;
-    return { cartId, cartUrl: `${PS_BASE}/index.php?controller=order` };
+    return { cartId, cartUrl: psCartUrl() };
   } catch {
     return null;
   }

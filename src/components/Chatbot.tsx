@@ -6,6 +6,11 @@ const WEBHOOK_URL =
   'https://paneln8n.transformaconia.com/webhook/031ab1e6-d64e-41f0-b03e-f5c0681a6491';
 
 const PS_BASE = 'https://esgas.nodoflow.com/JuanCarlos';
+const psSearch = (ref: string) =>
+  `${PS_BASE}/index.php?controller=search&s=${encodeURIComponent(ref)}`;
+const psProduct = (id: number) =>
+  `${PS_BASE}/index.php?id_product=${id}&controller=product`;
+const psCart = () => `${PS_BASE}/index.php?controller=order`;
 
 type Message = {
   id: string;
@@ -30,6 +35,7 @@ interface PSData {
   price: number;
   stock: number;
   productUrl: string;
+  searchUrl: string;
 }
 
 type CartItem = {
@@ -69,14 +75,8 @@ function TypingDots() {
   return (
     <div className="flex gap-1 items-center px-4 py-3">
       {[0, 150, 300].map((d) => (
-        <span
-          key={d}
-          className="block w-2 h-2 rounded-full"
-          style={{
-            background: '#00C2E0',
-            animation: `esgas-bounce 1s ease-in-out infinite ${d}ms`,
-          }}
-        />
+        <span key={d} className="block w-2 h-2 rounded-full"
+          style={{ background: '#00C2E0', animation: `esgas-bounce 1s ease-in-out infinite ${d}ms` }} />
       ))}
     </div>
   );
@@ -86,20 +86,11 @@ function renderContent(text: string) {
   return text.split('\n').map((line, i) => {
     const html = line
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(
-        /`(.*?)`/g,
-        '<code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-size:0.85em">$1</code>',
-      )
-      .replace(
-        /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
-        '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#00C2E0;text-decoration:underline;text-underline-offset:2px">$1</a>',
-      );
-    return (
-      <span key={i}>
-        {i > 0 && <br />}
-        <span dangerouslySetInnerHTML={{ __html: html }} />
-      </span>
-    );
+      .replace(/`(.*?)`/g,
+        '<code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-size:0.85em">$1</code>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#00C2E0;text-decoration:underline;text-underline-offset:2px">$1</a>');
+    return (<span key={i}>{i > 0 && <br />}<span dangerouslySetInnerHTML={{ __html: html }} /></span>);
   });
 }
 
@@ -118,7 +109,7 @@ function compressImage(file: File): Promise<{ base64: string; dataUrl: string; m
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
       const ctx = canvas.getContext('2d');
-      if (!ctx) return reject(new Error('Canvas context error'));
+      if (!ctx) return reject(new Error('Canvas error'));
       ctx.drawImage(img, 0, 0, width, height);
       const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
       const dataUrl = canvas.toDataURL(mimeType, 0.82);
@@ -132,24 +123,13 @@ function compressImage(file: File): Promise<{ base64: string; dataUrl: string; m
 
 function FabRobot({ dimmed }: { dimmed?: boolean }) {
   return (
-    <svg viewBox="0 0 200 135" width="108" height="73"
-      style={{
-        overflow: 'visible',
-        opacity: dimmed ? 0.55 : 1,
-        transition: 'opacity 0.3s',
-        filter: dimmed
-          ? 'drop-shadow(0 4px 10px rgba(0,60,150,0.25))'
-          : 'drop-shadow(0 10px 28px rgba(0,80,200,0.45))',
-      }}
-    >
+    <svg viewBox="0 0 200 135" width="108" height="73" style={{ overflow: 'visible', opacity: dimmed ? 0.55 : 1, transition: 'opacity 0.3s', filter: dimmed ? 'drop-shadow(0 4px 10px rgba(0,60,150,0.25))' : 'drop-shadow(0 10px 28px rgba(0,80,200,0.45))' }}>
       <defs>
         <linearGradient id="fabGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#FFFFFF" />
-          <stop offset="100%" stopColor="#CBD5E1" />
+          <stop offset="0%" stopColor="#FFFFFF" /><stop offset="100%" stopColor="#CBD5E1" />
         </linearGradient>
         <filter id="fabShadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
-          <feOffset dx="0" dy="2" result="offsetblur" />
+          <feGaussianBlur in="SourceAlpha" stdDeviation="2" /><feOffset dx="0" dy="2" result="offsetblur" />
           <feComponentTransfer><feFuncA type="linear" slope="0.3" /></feComponentTransfer>
           <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
@@ -177,19 +157,12 @@ function FabRobot({ dimmed }: { dimmed?: boolean }) {
 function BotAvatar({ size = 28 }: { size?: number }) {
   const r = size * 0.32;
   return (
-    <div style={{
-      width: size, height: size, borderRadius: r,
-      background: 'linear-gradient(135deg, #0047C8, #0092C2)',
-      boxShadow: '0 2px 8px rgba(0,80,200,0.3)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    }}>
+    <div style={{ width: size, height: size, borderRadius: r, background: 'linear-gradient(135deg, #0047C8, #0092C2)', boxShadow: '0 2px 8px rgba(0,80,200,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
       <svg viewBox="42 -2 116 97" width={size * 0.68} height={size * 0.68} overflow="visible">
         <rect x="45" y="5" width="110" height="85" rx="40" fill="#E2E8F0" />
         <rect x="56" y="19" width="88" height="50" rx="20" fill="#0F172A" />
-        <circle cx="82" cy="44" r="9" fill="#00C2E0" />
-        <circle cx="118" cy="44" r="9" fill="#00C2E0" />
-        <circle cx="85" cy="41" r="3" fill="white" fillOpacity="0.85" />
-        <circle cx="121" cy="41" r="3" fill="white" fillOpacity="0.85" />
+        <circle cx="82" cy="44" r="9" fill="#00C2E0" /><circle cx="118" cy="44" r="9" fill="#00C2E0" />
+        <circle cx="85" cy="41" r="3" fill="white" fillOpacity="0.85" /><circle cx="121" cy="41" r="3" fill="white" fillOpacity="0.85" />
         <path d="M90 59 Q100 65 110 59" fill="none" stroke="#00D1FF" strokeWidth="2.5" strokeLinecap="round" opacity="0.7" />
         <line x1="100" y1="5" x2="100" y2="-4" stroke="#94A3B8" strokeWidth="5" />
         <circle cx="100" cy="-4" r="5" fill="#00C2E0" />
@@ -200,48 +173,29 @@ function BotAvatar({ size = 28 }: { size?: number }) {
 
 const SYSTEM_OVERRIDE = `[INSTRUCCIONES DEL SISTEMA — PRIORIDAD MÁXIMA]
 
-Eres el asesor técnico de ESGAS, distribuidor oficial NTN/SNR. El sistema está conectado al PrestaShop real de ESGAS (esgas.nodoflow.com/JuanCarlos) — precios y stock se obtienen en tiempo real y se muestran automáticamente en el chat.
+Eres el asesor técnico de ESGAS, distribuidor oficial NTN/SNR. El sistema está conectado al PrestaShop real de ESGAS (esgas.nodoflow.com/JuanCarlos).
 
-🎯 TU MISIÓN:
-1. Asesoramiento técnico experto: equivalencias SKF/FAG/NSK/TIMKEN/KOYO→NTN/SNR, dimensiones ISO, selección por aplicación, diagnóstico de fallos.
-2. Confirmar referencias exactas para que el sistema muestre datos reales de PrestaShop.
-3. Guiar hacia confirmar cantidad y tramitar el pedido.
+🎯 TU MISIÓN: asesoramiento técnico experto + confirmar referencias + guiar al pedido.
 
-📦 FORMATO OBLIGATORIO — incluye SIEMPRE al final para cualquier producto mencionado:
+📦 FORMATO OBLIGATORIO — incluye SIEMPRE al final para cualquier producto:
 
 \`\`\`products
-[{"ref":"REFERENCIA_EXACTA","name":"Nombre descriptivo","url":"${PS_BASE}/buscar?s=REFERENCIA"}]
+[{"ref":"REFERENCIA_EXACTA","name":"Nombre","url":"${PS_BASE}/index.php?controller=search&s=REFERENCIA"}]
 \`\`\`
 
-El frontend mostrará precio real, stock actualizado y botones de compra desde PrestaShop automáticamente.
+🚫 PROHIBIDO: inventar precios/stock, "sin stock", "catálogo simulado", dar teléfonos.
+✅ ESTILO: directo, profesional. Cierra con "¿Confirmas cantidad para tramitar el pedido?"
 
-🚫 PROHIBIDO:
-- Inventar precios o stock exactos (el sistema los obtiene de PrestaShop en tiempo real)
-- "no tenemos" / "sin stock" / "catálogo simulado"
-- Dar números de teléfono o pedir que llamen
-
-✅ RESPUESTA TIPO para consulta de producto:
-**[REFERENCIA]** — Rodamiento [tipo] NTN/SNR[sufijos]
-[2-3 líneas técnicas: descripción, aplicación, ventajas frente a competencia si aplica]
-¿Confirmas la cantidad para tramitar el pedido? (Precio y stock actualizados están en la tarjeta de abajo)
-
-========= SUFIJOS =========
-2RS/LLU = doble sello caucho · ZZ = tapas metálicas · C3 = juego ampliado · NR = ranura anillo · M = jaula latón
-
-========= COMPETENCIA =========
-SKF/FAG/NSK/TIMKEN/KOYO → equivalente NTN/SNR exacto, destaca precio y disponibilidad inmediata
-
-========= PEDIDOS =========
-Si el cliente confirma cantidad → "Perfecto, usa el botón 'Añadir al carrito' del chat. Se añadirá a PrestaShop y podrás completar el pago."
+SUFIJOS: 2RS/LLU=sello caucho · ZZ=tapas metal · C3=juego ampliado · NR=ranura · M=jaula latón
+COMPETENCIA SKF/FAG/NSK → equivalente NTN/SNR exacto
 
 [CONSULTA DEL CLIENTE]:`;
 
 function isBadResponse(text: string): boolean {
   const lower = text.toLowerCase();
-  return [
-    'no he encontrado', 'no se ha encontrado', 'no tenemos', 'no está disponible',
-    'no encontré', 'catálogo simulado', 'catalogo simulado', 'agotado',
-    'no aparece', 'consulte por teléfono', 'llamar al', 'llame al', 'fuera de catálogo',
+  return ['no he encontrado','no se ha encontrado','no tenemos','no está disponible',
+    'no encontré','catálogo simulado','catalogo simulado','agotado',
+    'no aparece','consulte por teléfono','llamar al','llame al','fuera de catálogo',
   ].some((p) => lower.includes(p));
 }
 
@@ -275,18 +229,21 @@ function extractReference(text: string): string | null {
 
 function buildFallbackResponse(userText: string): string {
   const ref = extractReference(userText) ?? 'el rodamiento solicitado';
-  const cleanRef = ref.replace(/[^A-Z0-9]/g, '');
   const { stock, price } = fakeStockPrice(ref);
   const suffixes: string[] = [];
-  if (/2RS|LLU/i.test(ref)) suffixes.push('doble sello de caucho (polvo/humedad)');
-  if (/ZZ/i.test(ref)) suffixes.push('doble tapa metálica (velocidad/fricción)');
-  if (/C3/i.test(ref)) suffixes.push('juego ampliado (dilatación térmica)');
-  if (/NR/i.test(ref)) suffixes.push('ranura para anillo de retención');
+  if (/2RS|LLU/i.test(ref)) suffixes.push('doble sello de caucho');
+  if (/ZZ/i.test(ref)) suffixes.push('doble tapa metálica');
+  if (/C3/i.test(ref)) suffixes.push('juego ampliado');
   const suffix = suffixes.length ? ` — ${suffixes.join(', ')}` : '';
   const qtyMatch = userText.match(/(\d{1,4})\s*(unidades|uds|rodamientos|piezas)?/i);
   const qty = qtyMatch ? qtyMatch[1] : '';
   const qtyClause = qty && parseInt(qty, 10) > 0 ? `${qty} unidades` : 'la cantidad que necesites';
-  return `**${ref}** — Rodamiento rígido de bolas NTN/SNR${suffix}\n\n📦 **Stock:** ${stock} unidades disponibles\n💶 **Precio:** ${price.toFixed(2)} €/ud. (IVA no incluido)\n🚚 **Plazo:** Envío en 24-48 h (pedidos antes de las 14:00 salen el mismo día)\n\nRodamiento de calidad certificada ISO, apto para maquinaria industrial general, motores eléctricos y reductoras.\n\n[Ver ficha](${PS_BASE}/buscar?s=${cleanRef}) · [Ir al carrito](${PS_BASE}/index.php?controller=order)\n\n¿Confirmo ${qtyClause}? Puedo preparar el pedido ahora mismo.`;
+  return `**${ref}** — Rodamiento rígido de bolas NTN/SNR${suffix}\n\n📦 **Stock:** ${stock} unidades disponibles\n💶 **Precio:** ${price.toFixed(2)} €/ud. (IVA no incluido)\n🚚 **Plazo:** Envío en 24-48 h\n\n¿Confirmo ${qtyClause}? Puedo preparar el pedido ahora mismo.`;
+}
+
+interface PSSearchResult {
+  products: PSData[];
+  searchUrl: string;
 }
 
 async function fetchPSProducts(queries: string[]): Promise<Map<string, PSData>> {
@@ -297,11 +254,9 @@ async function fetchPSProducts(queries: string[]): Promise<Map<string, PSData>> 
       try {
         const res = await fetch(`/api/prestashop/search?q=${encodeURIComponent(q)}`);
         if (!res.ok) return;
-        const products: PSData[] = await res.json();
-        products.forEach((p) => map.set(p.reference.toUpperCase(), p));
-      } catch {
-        // ignore — PS not configured, fallback data is used
-      }
+        const data: PSSearchResult = await res.json();
+        (data.products ?? []).forEach((p) => map.set(p.reference.toUpperCase(), p));
+      } catch { /* PS no configurado, usa fallback */ }
     })
   );
   return map;
@@ -319,8 +274,6 @@ export default function Chatbot() {
   const [pendingImage, setPendingImage] = useState<{ base64: string; dataUrl: string; mimeType: string } | null>(null);
   const [psCache, setPsCache] = useState<Map<string, PSData>>(new Map());
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [cartUrl, setCartUrl] = useState<string | null>(null);
-  const [addingToCart, setAddingToCart] = useState<Set<string>>(new Set());
 
   const [sessionId] = useState<string>(() => {
     if (typeof window === 'undefined') return `s-${Date.now()}`;
@@ -360,41 +313,30 @@ export default function Chatbot() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
-    try {
-      const compressed = await compressImage(file);
-      setPendingImage(compressed);
-    } catch { /* ignore */ }
+    try { setPendingImage(await compressImage(file)); } catch { /* ignore */ }
   }, []);
 
-  const handleAddToCart = useCallback(async (card: ProductCard) => {
-    const psProduct = psCache.get(card.ref.toUpperCase());
-    if (!psProduct) {
-      window.open(`${PS_BASE}/buscar?s=${encodeURIComponent(card.ref)}`, '_blank');
-      return;
+  // Opens product page in PrestaShop (best UX: user adds to cart directly in PS storefront)
+  const handleGoToProduct = useCallback((card: ProductCard) => {
+    const ps = psCache.get(card.ref.toUpperCase());
+    if (ps) {
+      window.open(ps.productUrl, '_blank');
+    } else {
+      window.open(psSearch(card.ref), '_blank');
     }
-    setAddingToCart((prev) => new Set([...prev, card.ref]));
-    try {
-      const res = await fetch('/api/prestashop/cart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: [{ productId: psProduct.id, qty: 1 }] }),
-      });
-      if (res.ok) {
-        const data: { cartId: string; cartUrl: string } = await res.json();
-        setCartUrl(data.cartUrl);
-        setCart((prev) => {
-          const existing = prev.find((i) => i.psId === psProduct.id);
-          if (existing) return prev.map((i) => i.psId === psProduct.id ? { ...i, qty: i.qty + 1 } : i);
-          return [...prev, { psId: psProduct.id, ref: card.ref, name: psProduct.name, qty: 1, price: psProduct.price }];
-        });
-      } else {
-        window.open(psProduct.productUrl, '_blank');
-      }
-    } catch {
-      window.open(card.url || `${PS_BASE}/buscar?s=${encodeURIComponent(card.ref)}`, '_blank');
-    } finally {
-      setAddingToCart((prev) => { const s = new Set(prev); s.delete(card.ref); return s; });
-    }
+    // Track in local cart for summary display
+    setCart((prev) => {
+      const key = card.ref.toUpperCase();
+      if (prev.find((i) => i.ref === key)) return prev;
+      const ps2 = psCache.get(key);
+      return [...prev, {
+        psId: ps2?.id ?? 0,
+        ref: card.ref,
+        name: ps2?.name ?? card.name ?? card.ref,
+        qty: 1,
+        price: ps2?.price ?? card.price ?? 0,
+      }];
+    });
   }, [psCache]);
 
   const send = useCallback(
@@ -406,7 +348,7 @@ export default function Chatbot() {
       const userMsg: Message = {
         id: `u${Date.now()}`,
         role: 'user',
-        content: t || (img ? '📷 Imagen enviada para identificar el artículo.' : ''),
+        content: t || (img ? '📷 Imagen enviada.' : ''),
         imageUrl: img?.dataUrl,
         ts: new Date(),
       };
@@ -416,9 +358,8 @@ export default function Chatbot() {
       setIsTyping(true);
 
       try {
-        const userQuery = t || (img ? 'Identifica este artículo de la imagen, dame referencia exacta, descripción técnica y botón de compra.' : '');
+        const userQuery = t || 'Identifica este artículo de la imagen, dame referencia exacta y botón de compra.';
 
-        // PS search runs in parallel with n8n to have real data ready when AI responds
         const userRef = extractReference(t);
         const psQueries = [t, userRef].filter((x): x is string => Boolean(x?.trim()));
         const psPromise = psQueries.length > 0
@@ -426,7 +367,7 @@ export default function Chatbot() {
           : Promise.resolve(new Map<string, PSData>());
 
         const augmentedMessage = `${SYSTEM_OVERRIDE}\n${userQuery}`;
-        const body: Record<string, string> = { sessionId, message: augmentedMessage, context: SYSTEM_OVERRIDE };
+        const body: Record<string, string> = { sessionId, message: augmentedMessage };
         if (img) { body.image = img.base64; body.imageType = img.mimeType; }
 
         const [psNewData, res] = await Promise.all([
@@ -438,17 +379,15 @@ export default function Chatbot() {
 
         const data = await res.json();
         let reply: string = data.response ?? data.output ?? data.text ?? 'Lo siento, no pude procesar la solicitud.';
-
         if (isBadResponse(reply) && t) reply = buildFallbackResponse(t);
 
         setMessages((p) => [...p, { id: `b${Date.now()}`, role: 'bot', content: reply, ts: new Date() }]);
         if (!isOpen) setHasNew(true);
 
-        // Enrich product cards from AI response asynchronously
         const { cards } = parseProductCards(reply);
         if (cards.length > 0) {
-          fetchPSProducts(cards.map((c) => c.ref)).then((moreData) => {
-            if (moreData.size > 0) setPsCache((prev) => new Map([...prev, ...moreData]));
+          fetchPSProducts(cards.map((c) => c.ref)).then((more) => {
+            if (more.size > 0) setPsCache((prev) => new Map([...prev, ...more]));
           });
         }
       } catch {
@@ -461,7 +400,6 @@ export default function Chatbot() {
   );
 
   const fmt = (d: Date) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-
   const toggleOpen = () => {
     const opening = !isOpen;
     setIsOpen(opening);
@@ -469,45 +407,33 @@ export default function Chatbot() {
     if (opening) { setShowTooltip(false); localStorage.setItem('esgas-tooltip-seen', '1'); }
   };
 
-  const cartTotalItems = cart.reduce((sum, i) => sum + i.qty, 0);
-  const cartTotalPrice = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const cartTotalItems = cart.length;
+  const cartTotalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
 
   return (
     <div className="fixed bottom-4 right-4 z-[999999] flex flex-col items-end"
       style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', gap: '10px' }}>
 
       {/* ── CHAT PANEL ── */}
-      <div style={{
-        width: 'min(420px, calc(100vw - 24px))',
-        height: 'min(600px, calc(100dvh - 210px))',
-        transition: 'opacity 0.35s ease, transform 0.45s cubic-bezier(0.34,1.56,0.64,1)',
-        opacity: isOpen ? 1 : 0,
-        transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.93) translateY(12px)',
-        pointerEvents: isOpen ? 'all' : 'none',
-      }}>
+      <div style={{ width: 'min(420px, calc(100vw - 24px))', height: 'min(600px, calc(100dvh - 210px))', transition: 'opacity 0.35s ease, transform 0.45s cubic-bezier(0.34,1.56,0.64,1)', opacity: isOpen ? 1 : 0, transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.93) translateY(12px)', pointerEvents: isOpen ? 'all' : 'none' }}>
         <div className="w-full h-full flex flex-col rounded-3xl overflow-hidden"
           style={{ background: '#09131F', boxShadow: '0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)' }}>
 
-          {/* ── Header ── */}
+          {/* Header */}
           <div className="flex items-center gap-3 px-5 py-4 flex-shrink-0"
             style={{ background: 'linear-gradient(160deg, #07101E 0%, #0C1D38 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             <BotAvatar size={40} />
             <div className="flex-1 min-w-0">
               <p className="font-bold text-white text-sm tracking-tight">Asistente ESGAS</p>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"
-                  style={{ animation: 'esgas-pulse 2.5s ease-in-out infinite' }} />
-                <span className="text-[11px]" style={{ color: 'rgba(148,163,184,0.85)' }}>
-                  Disponible · PrestaShop en tiempo real
-                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ animation: 'esgas-pulse 2.5s ease-in-out infinite' }} />
+                <span className="text-[11px]" style={{ color: 'rgba(148,163,184,0.85)' }}>Disponible · PrestaShop en tiempo real</span>
               </div>
             </div>
 
-            {/* Cart badge */}
             {cartTotalItems > 0 && (
-              <a href={cartUrl ?? `${PS_BASE}/index.php?controller=order`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all duration-200"
+              <a href={psCart()} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
                 style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.25)', textDecoration: 'none' }}
                 title="Ver carrito en PrestaShop">
                 <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="#34D399" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -518,20 +444,18 @@ export default function Chatbot() {
               </a>
             )}
 
-            <button onClick={toggleOpen}
-              className="flex items-center justify-center rounded-xl transition-all duration-200"
+            <button onClick={toggleOpen} className="flex items-center justify-center rounded-xl transition-all duration-200"
               style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
               onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.09)')}
               onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)')}
               aria-label="Minimizar chat">
-              <svg viewBox="0 0 24 24" width={17} height={17} fill="none"
-                stroke="rgba(148,163,184,1)" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="rgba(148,163,184,1)" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9l6 6 6-6" />
               </svg>
             </button>
           </div>
 
-          {/* ── Messages ── */}
+          {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
             {messages.map((msg) => {
               const { text: cleanText, cards } = msg.role === 'bot'
@@ -543,11 +467,9 @@ export default function Chatbot() {
                     {msg.role === 'bot' && <BotAvatar size={28} />}
                     <div className={`flex flex-col gap-1 max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {msg.imageUrl && (
-                        <div className="rounded-2xl overflow-hidden"
-                          style={{ border: msg.role === 'user' ? '2px solid rgba(0,100,200,0.4)' : '2px solid rgba(255,255,255,0.08)', maxWidth: '220px' }}>
+                        <div className="rounded-2xl overflow-hidden" style={{ border: '2px solid rgba(0,100,200,0.4)', maxWidth: '220px' }}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={msg.imageUrl} alt="Imagen enviada"
-                            style={{ display: 'block', width: '100%', maxHeight: '180px', objectFit: 'cover' }} />
+                          <img src={msg.imageUrl} alt="img" style={{ display: 'block', width: '100%', maxHeight: '180px', objectFit: 'cover' }} />
                         </div>
                       )}
                       {cleanText && (
@@ -562,77 +484,62 @@ export default function Chatbot() {
                     </div>
                   </div>
 
-                  {/* Product cards with real PS data */}
+                  {/* Product cards */}
                   {cards.length > 0 && (
                     <div className="mt-2 ml-9 flex flex-col gap-2">
                       {cards.map((card, ci) => {
                         const ps = psCache.get(card.ref.toUpperCase());
                         const realStock = ps !== undefined ? ps.stock : card.stock;
                         const realPrice = ps?.price ?? card.price;
-                        const realUrl = ps?.productUrl ?? card.url;
                         const realName = ps?.name ?? card.name ?? card.ref;
-                        const isAdding = addingToCart.has(card.ref);
-                        const inCart = cart.find((i) => i.ref === card.ref);
+                        const productPageUrl = ps ? ps.productUrl : psSearch(card.ref);
+                        const inCart = cart.find((i) => i.ref === card.ref.toUpperCase());
                         return (
                           <div key={ci} className="rounded-2xl px-3 py-2.5 flex flex-col gap-2"
-                            style={{ background: '#0D1B2E', border: `1px solid ${ps ? 'rgba(0,180,220,0.3)' : 'rgba(0,150,220,0.2)'}` }}>
+                            style={{ background: '#0D1B2E', border: `1px solid ${ps ? 'rgba(0,180,220,0.3)' : 'rgba(0,150,220,0.18)'}` }}>
 
-                            {/* Header row */}
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <p className="text-white font-semibold text-xs leading-tight truncate">{realName}</p>
-                                  {ps && (
-                                    <span className="text-[8px] px-1 py-0.5 rounded font-bold flex-shrink-0"
-                                      style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399' }}>LIVE</span>
-                                  )}
+                                  {ps && <span className="text-[8px] px-1 py-0.5 rounded font-bold flex-shrink-0" style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399' }}>LIVE</span>}
                                 </div>
                                 <p className="text-[10px] mt-0.5" style={{ color: 'rgba(148,163,184,0.7)' }}>Ref: {card.ref}</p>
                               </div>
                               <div className="flex items-center gap-1 flex-shrink-0">
                                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: stockColor(realStock) }} />
-                                <span className="text-[10px] font-medium" style={{ color: stockColor(realStock) }}>
-                                  {stockLabel(realStock)}
-                                </span>
+                                <span className="text-[10px] font-medium" style={{ color: stockColor(realStock) }}>{stockLabel(realStock)}</span>
                               </div>
                             </div>
 
-                            {/* Price row */}
                             {realPrice !== undefined && realPrice > 0 && (
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-bold" style={{ color: '#60A5FA' }}>
                                   {realPrice.toFixed(2)} €
                                   <span className="text-[10px] font-normal ml-1" style={{ color: 'rgba(148,163,184,0.5)' }}>/ ud. s/IVA</span>
                                 </span>
-                                {inCart && (
-                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg"
-                                    style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399' }}>
-                                    ✓ ×{inCart.qty} en carrito
-                                  </span>
-                                )}
+                                {inCart && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg" style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399' }}>✓ Visto</span>}
                               </div>
                             )}
 
-                            {/* Action buttons */}
                             <div className="flex gap-2">
-                              <a href={realUrl} target="_blank" rel="noopener noreferrer"
-                                className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl transition-all duration-200"
+                              <a href={productPageUrl} target="_blank" rel="noopener noreferrer"
+                                className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl"
                                 style={{ background: 'rgba(0,100,200,0.18)', color: '#60A5FA', border: '1px solid rgba(0,100,200,0.25)', textDecoration: 'none' }}>
                                 Ver ficha
                               </a>
-                              <button
-                                onClick={() => handleAddToCart(card)}
-                                disabled={isAdding}
-                                className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl transition-all duration-200 disabled:opacity-50"
-                                style={{
-                                  background: isAdding ? 'rgba(0,180,100,0.08)' : 'rgba(0,180,100,0.18)',
-                                  color: '#34D399',
-                                  border: '1px solid rgba(0,180,100,0.25)',
-                                  cursor: isAdding ? 'wait' : 'pointer',
-                                }}>
-                                {isAdding ? '…' : inCart ? '+ Más' : '🛒 Añadir'}
+                              <button onClick={() => handleGoToProduct(card)}
+                                className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl"
+                                style={{ background: 'rgba(0,180,100,0.18)', color: '#34D399', border: '1px solid rgba(0,180,100,0.25)', cursor: 'pointer' }}>
+                                🛒 Añadir al carrito
                               </button>
                             </div>
+
+                            {!ps && (
+                              <p className="text-[9px] text-center" style={{ color: 'rgba(148,163,184,0.4)' }}>
+                                Se abre la ficha en PrestaShop para añadir al carrito
+                              </p>
+                            )}
                           </div>
                         );
                       })}
@@ -645,75 +552,58 @@ export default function Chatbot() {
             {isTyping && (
               <div className="flex gap-2.5 justify-start">
                 <BotAvatar size={28} />
-                <div className="rounded-2xl rounded-bl-sm"
-                  style={{ background: '#101D30', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <TypingDots />
-                </div>
+                <div className="rounded-2xl rounded-bl-sm" style={{ background: '#101D30', border: '1px solid rgba(255,255,255,0.07)' }}><TypingDots /></div>
               </div>
             )}
             <div ref={bottomRef} />
           </div>
 
-          {/* ── Cart summary bar ── */}
+          {/* Cart bar */}
           {cartTotalItems > 0 && (
             <div className="flex-shrink-0 px-4 py-2.5 flex items-center justify-between gap-3"
               style={{ background: '#06101C', borderTop: '1px solid rgba(16,185,129,0.15)' }}>
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold" style={{ color: '#34D399' }}>
-                  🛒 {cartTotalItems} artículo{cartTotalItems !== 1 ? 's' : ''} en carrito
+                  🛒 {cartTotalItems} artículo{cartTotalItems !== 1 ? 's' : ''} vistos
                 </p>
-                <p className="text-[10px]" style={{ color: 'rgba(148,163,184,0.55)' }}>
-                  {cartTotalPrice.toFixed(2)} € (IVA no incl.)
-                </p>
+                {cartTotalPrice > 0 && (
+                  <p className="text-[10px]" style={{ color: 'rgba(148,163,184,0.55)' }}>
+                    aprox. {cartTotalPrice.toFixed(2)} € s/IVA
+                  </p>
+                )}
               </div>
-              <a href={cartUrl ?? `${PS_BASE}/index.php?controller=order`}
-                target="_blank" rel="noopener noreferrer"
+              <a href={psCart()} target="_blank" rel="noopener noreferrer"
                 className="text-[11px] font-bold px-3 py-1.5 rounded-xl flex-shrink-0"
                 style={{ background: 'linear-gradient(135deg, #059669, #10B981)', color: 'white', textDecoration: 'none', boxShadow: '0 4px 12px rgba(16,185,129,0.3)' }}>
-                Tramitar pedido →
+                Ir al carrito →
               </a>
             </div>
           )}
 
-          {/* ── Pending image preview ── */}
+          {/* Pending image */}
           {pendingImage && (
-            <div className="flex-shrink-0 px-4 pb-2 flex items-end gap-2"
-              style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+            <div className="flex-shrink-0 px-4 pb-2 flex items-end gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
               <div className="relative inline-block mt-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={pendingImage.dataUrl} alt="Vista previa"
-                  style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '12px', border: '2px solid rgba(0,150,220,0.4)', display: 'block' }} />
+                <img src={pendingImage.dataUrl} alt="preview" style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '12px', border: '2px solid rgba(0,150,220,0.4)', display: 'block' }} />
                 <button onClick={() => setPendingImage(null)} aria-label="Eliminar imagen"
-                  style={{ position: 'absolute', top: '-8px', right: '-8px', width: '20px', height: '20px', borderRadius: '50%', background: '#EF4444', border: '2px solid #09131F', color: 'white', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: 1 }}>
-                  ✕
-                </button>
+                  style={{ position: 'absolute', top: '-8px', right: '-8px', width: '20px', height: '20px', borderRadius: '50%', background: '#EF4444', border: '2px solid #09131F', color: 'white', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
-              <p className="text-[11px] mb-1" style={{ color: 'rgba(148,163,184,0.7)' }}>
-                Imagen lista. Escribe un comentario o envía directamente.
-              </p>
+              <p className="text-[11px] mb-1" style={{ color: 'rgba(148,163,184,0.7)' }}>Imagen lista. Escribe un comentario o envía directamente.</p>
             </div>
           )}
 
-          {/* ── Input ── */}
+          {/* Input */}
           <form onSubmit={(e) => { e.preventDefault(); send(input); }}
             className="flex gap-2 items-center px-4 py-3.5 flex-shrink-0"
             style={{ background: '#06101C', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
-              style={{ display: 'none' }} onChange={handleImageSelect} />
+            <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleImageSelect} />
 
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isTyping}
-              aria-label="Enviar foto"
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isTyping} aria-label="Enviar foto"
               className="flex items-center justify-center flex-shrink-0 transition-all duration-200 disabled:opacity-30"
-              style={{
-                width: '44px', height: '44px', borderRadius: '14px',
-                background: pendingImage ? 'linear-gradient(135deg, #0078B8, #00C2E0)' : 'rgba(255,255,255,0.05)',
-                border: pendingImage ? 'none' : '1px solid rgba(255,255,255,0.08)',
-                boxShadow: pendingImage ? '0 4px 14px rgba(0,150,220,0.4)' : 'none',
-              }}>
-              <svg viewBox="0 0 24 24" width={18} height={18} fill="none"
-                stroke={pendingImage ? 'white' : 'rgba(148,163,184,0.85)'} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
+              style={{ width: '44px', height: '44px', borderRadius: '14px', background: pendingImage ? 'linear-gradient(135deg, #0078B8, #00C2E0)' : 'rgba(255,255,255,0.05)', border: pendingImage ? 'none' : '1px solid rgba(255,255,255,0.08)', boxShadow: pendingImage ? '0 4px 14px rgba(0,150,220,0.4)' : 'none' }}>
+              <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke={pendingImage ? 'white' : 'rgba(148,163,184,0.85)'} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
               </svg>
             </button>
 
@@ -727,25 +617,18 @@ export default function Chatbot() {
 
             <button type="submit" disabled={(!input.trim() && !pendingImage) || isTyping}
               className="flex items-center justify-center flex-shrink-0 transition-all duration-200 disabled:opacity-30"
-              style={{
-                width: '44px', height: '44px', borderRadius: '14px',
-                background: 'linear-gradient(135deg, #0047C8, #0092C2)',
-                boxShadow: (input.trim() || pendingImage) ? '0 4px 18px rgba(0,80,200,0.45)' : 'none',
-              }}
+              style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'linear-gradient(135deg, #0047C8, #0092C2)', boxShadow: (input.trim() || pendingImage) ? '0 4px 18px rgba(0,80,200,0.45)' : 'none' }}
               aria-label="Enviar mensaje">
-              <svg viewBox="0 0 24 24" width={17} height={17} fill="white">
-                <path d="M2 21l21-9L2 3v7l15 2-15 2z" />
-              </svg>
+              <svg viewBox="0 0 24 24" width={17} height={17} fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>
             </button>
           </form>
         </div>
       </div>
 
-      {/* ── MINI ROBOT FAB ── */}
+      {/* FAB */}
       <div className="relative flex flex-col items-center">
         {showTooltip && !isOpen && (
-          <div className="absolute right-0 pointer-events-none select-none"
-            style={{ bottom: 'calc(100% + 10px)', animation: 'esgas-fadein 0.4s ease forwards' }}>
+          <div className="absolute right-0 pointer-events-none select-none" style={{ bottom: 'calc(100% + 10px)', animation: 'esgas-fadein 0.4s ease forwards' }}>
             <div className="text-xs font-semibold text-white px-4 py-2.5 rounded-2xl rounded-br-sm whitespace-nowrap relative"
               style={{ background: 'linear-gradient(135deg, #003D99, #0078C8)', boxShadow: '0 8px 24px rgba(0,80,200,0.4)' }}>
               ¿Tienes alguna duda?
@@ -753,28 +636,18 @@ export default function Chatbot() {
             </div>
           </div>
         )}
-
         {hasNew && !isOpen && (
           <span className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
             style={{ background: '#EF4444', border: '2px solid #050B18' }}>1</span>
         )}
-
         <div className="cursor-pointer flex flex-col items-center" onClick={toggleOpen}
           style={{ animation: isOpen ? 'none' : 'leanFloat 3.5s ease-in-out infinite' }}>
           <FabRobot dimmed={isOpen} />
           <div className="text-white rounded-2xl font-extrabold text-[11px] tracking-wide relative z-10 text-center uppercase border border-white/20 transition-all duration-300"
-            style={{
-              background: 'linear-gradient(to right, #00D1FF, #0070FF)',
-              boxShadow: '0 8px 20px rgba(0,209,255,0.38)',
-              marginTop: '-14px', padding: '10px 20px',
-              opacity: isOpen ? 0 : 1,
-              transform: isOpen ? 'scaleY(0.7) translateY(-4px)' : 'scaleY(1)',
-              pointerEvents: isOpen ? 'none' : 'auto',
-            }}>
+            style={{ background: 'linear-gradient(to right, #00D1FF, #0070FF)', boxShadow: '0 8px 20px rgba(0,209,255,0.38)', marginTop: '-14px', padding: '10px 20px', opacity: isOpen ? 0 : 1, transform: isOpen ? 'scaleY(0.7) translateY(-4px)' : 'scaleY(1)', pointerEvents: isOpen ? 'none' : 'auto' }}>
             ¿ALGUNA DUDA? PINCHA AQUÍ
           </div>
         </div>
-
         <div className="mt-2 text-[9px] font-medium tracking-wide" style={{ color: 'rgba(71,85,105,0.9)' }}>
           powered by{' '}
           <a href="https://flownexion.com/" target="_blank" rel="noopener noreferrer"

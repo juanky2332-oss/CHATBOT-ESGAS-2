@@ -5,6 +5,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 const WEBHOOK_URL =
   'https://paneln8n.transformaconia.com/webhook/031ab1e6-d64e-41f0-b03e-f5c0681a6491';
 
+const PS_BASE = 'https://esgas.nodoflow.com/JuanCarlos';
+const PS_CART_URL = `${PS_BASE}/index.php?controller=cart`;
+
 const QUICK_REPLIES = [
   '¿Tenéis el rodamiento 6204 EE?',
   '¿Cuánto tarda un pedido?',
@@ -24,7 +27,10 @@ interface ProductCard {
   name?: string;
   url: string;
   stock?: number;
+  price?: string;
 }
+
+type CartItem = { ref: string; name: string; qty: number; price?: string };
 
 function parseProductCards(text: string): { text: string; cards: ProductCard[] } {
   const match = text.match(/```products\n([\s\S]*?)\n```/);
@@ -38,6 +44,14 @@ function parseProductCards(text: string): { text: string; cards: ProductCard[] }
   }
 }
 
+function buildAddToCartUrl(card: ProductCard, qty: number): string {
+  const idMatch = card.url.match(/id_product=(\d+)/);
+  if (idMatch) {
+    return `${PS_BASE}/index.php?controller=cart&add=1&id_product=${idMatch[1]}&qty=${qty}`;
+  }
+  return PS_CART_URL;
+}
+
 function stockColor(stock?: number): string {
   if (stock === undefined || stock < 0) return '#64748B';
   if (stock === 0) return '#EF4444';
@@ -46,9 +60,9 @@ function stockColor(stock?: number): string {
 }
 
 function stockLabel(stock?: number): string {
-  if (stock === undefined || stock < 0) return 'Ver catálogo';
+  if (stock === undefined || stock < 0) return 'Consultar';
   if (stock === 0) return 'Sin stock';
-  if (stock <= 10) return `${stock} uds`;
+  if (stock <= 10) return `Últimas ${stock} uds`;
   return `${stock} uds`;
 }
 
@@ -90,7 +104,6 @@ function renderContent(text: string) {
   });
 }
 
-/* ── Mini robot SVG ── */
 function FabRobot({ dimmed }: { dimmed?: boolean }) {
   return (
     <svg
@@ -123,34 +136,20 @@ function FabRobot({ dimmed }: { dimmed?: boolean }) {
           </feMerge>
         </filter>
       </defs>
-
-      {/* Body */}
       <rect x="75" y="80" width="50" height="30" rx="10" fill="#CBD5E1" />
-
-      {/* Arms */}
       <path d="M50 70 Q30 70 35 110" stroke="url(#fabGrad)" strokeWidth="18" strokeLinecap="round" fill="none" />
       <path d="M150 70 Q170 70 165 110" stroke="url(#fabGrad)" strokeWidth="18" strokeLinecap="round" fill="none" />
-
-      {/* Head */}
       <rect x="45" y="5" width="110" height="90" rx="45" fill="url(#fabGrad)" />
       <rect x="55" y="20" width="90" height="50" rx="22" fill="#0F172A" />
-
-      {/* Eyes (pulsing cyan) */}
       <g style={{ animation: 'blinkEyesOnly 4s infinite', transformOrigin: 'center 45px' }}>
         <circle cx="82" cy="45" r="9" className="fab-eye-l" />
         <circle cx="118" cy="45" r="9" className="fab-eye-r" />
         <circle cx="85" cy="42" r="3" fill="white" fillOpacity="0.82" />
         <circle cx="121" cy="42" r="3" fill="white" fillOpacity="0.82" />
       </g>
-
-      {/* Smile */}
       <path d="M90 60 Q100 66 110 60" fill="none" stroke="#00D1FF" strokeWidth="2" strokeLinecap="round" opacity="0.65" />
-
-      {/* Antenna */}
       <line x1="100" y1="5" x2="100" y2="-8" stroke="#94A3B8" strokeWidth="4" />
       <circle cx="100" cy="-8" r="5" className="fab-antenna" />
-
-      {/* Hands */}
       <rect x="25" y="105" width="45" height="15" rx="7" fill="#94A3B8" filter="url(#fabShadow)" />
       <rect x="130" y="105" width="45" height="15" rx="7" fill="#94A3B8" filter="url(#fabShadow)" />
     </svg>
@@ -163,7 +162,7 @@ export default function Chatbot() {
     {
       id: 'init',
       role: 'bot',
-      content: 'Soy tu asistente de ESGAS. ¿En qué puedo ayudarte?',
+      content: '¡Hola! Soy el asesor técnico de ESGAS\n¿en qué puedo ayudarte?',
       ts: new Date(),
     },
   ]);
@@ -171,6 +170,9 @@ export default function Chatbot() {
   const [isTyping, setIsTyping] = useState(false);
   const [hasNew, setHasNew] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [qtys, setQtys] = useState<Record<string, number>>({});
+  const [addedRefs, setAddedRefs] = useState<Set<string>>(new Set());
 
   const [sessionId] = useState<string>(() => {
     if (typeof window === 'undefined') return `s-${Date.now()}`;
@@ -185,6 +187,7 @@ export default function Chatbot() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const userHasSpoken = messages.some((m) => m.role === 'user');
+  const cartCount = cartItems.reduce((acc, i) => acc + i.qty, 0);
 
   useEffect(() => {
     const open = () => { setIsOpen(true); setHasNew(false); setShowTooltip(false); };
@@ -206,6 +209,29 @@ export default function Chatbot() {
       setHasNew(false);
     }
   }, [isOpen, messages.length]);
+
+  const getQty = (ref: string) => qtys[ref] ?? 1;
+
+  const setQty = (ref: string, val: number) => {
+    setQtys((prev) => ({ ...prev, [ref]: Math.max(1, val) }));
+  };
+
+  const handleAddToCart = (card: ProductCard, buyNow: boolean) => {
+    const qty = getQty(card.ref);
+    setCartItems((prev) => {
+      const existing = prev.find((i) => i.ref === card.ref);
+      if (existing) {
+        return prev.map((i) => i.ref === card.ref ? { ...i, qty: i.qty + qty } : i);
+      }
+      return [...prev, { ref: card.ref, name: card.name ?? card.ref, qty, price: card.price }];
+    });
+    setAddedRefs((prev) => new Set(prev).add(card.ref));
+    const url = buildAddToCartUrl(card, qty);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    if (buyNow) {
+      setTimeout(() => window.open(PS_CART_URL, '_blank', 'noopener,noreferrer'), 300);
+    }
+  };
 
   const send = useCallback(
     async (text: string) => {
@@ -272,7 +298,7 @@ export default function Chatbot() {
       <div
         style={{
           width: 'min(420px, calc(100vw - 24px))',
-          height: 'min(600px, calc(100dvh - 210px))',
+          height: 'min(620px, calc(100dvh - 210px))',
           transition: 'opacity 0.35s ease, transform 0.45s cubic-bezier(0.34,1.56,0.64,1)',
           opacity: isOpen ? 1 : 0,
           transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.93) translateY(12px)',
@@ -314,10 +340,31 @@ export default function Chatbot() {
                   style={{ animation: 'esgas-pulse 2.5s ease-in-out infinite' }}
                 />
                 <span className="text-[11px]" style={{ color: 'rgba(148,163,184,0.85)' }}>
-                  Disponible · Responde al instante
+                  Disponible · PrestaShop en tiempo real
                 </span>
               </div>
             </div>
+
+            {/* Cart badge */}
+            {cartCount > 0 && (
+              <a
+                href={PS_CART_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl flex-shrink-0"
+                style={{
+                  background: 'rgba(16,185,129,0.15)',
+                  border: '1px solid rgba(16,185,129,0.3)',
+                  color: '#34D399',
+                  textDecoration: 'none',
+                }}
+              >
+                <svg viewBox="0 0 24 24" width={13} height={13} fill="currentColor">
+                  <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM5.8 6H20l-1.68 8.39c-.16.8-.85 1.36-1.67 1.36H8.68c-.83 0-1.53-.58-1.67-1.39L5.8 6z"/>
+                </svg>
+                <span className="text-[11px] font-bold">{cartCount}</span>
+              </a>
+            )}
 
             <button
               onClick={toggleOpen}
@@ -372,7 +419,7 @@ export default function Chatbot() {
                         }}
                       >
                         <svg viewBox="0 0 24 24" width={13} height={13} fill="white">
-                          <path d="M12 2a2 2 0 0 1 2 2 2 2 0 0 1-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2M7 14a5 5 0 0 0 10 0m-9 6v-2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2z" />
+                          <path d="M12 2a2 2 0 0 1 2 2 2 2 0 0 1-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2" />
                         </svg>
                       </div>
                     )}
@@ -410,72 +457,184 @@ export default function Chatbot() {
 
                   {/* Product cards */}
                   {cards.length > 0 && (
-                    <div className="mt-2 ml-9 flex flex-col gap-2">
-                      {cards.map((card, ci) => (
-                        <div
-                          key={ci}
-                          className="rounded-2xl px-3 py-2.5 flex flex-col gap-2"
-                          style={{
-                            background: '#0D1B2E',
-                            border: '1px solid rgba(0,150,220,0.2)',
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-white font-semibold text-xs leading-tight truncate">
-                                {card.name ?? card.ref}
-                              </p>
-                              <p className="text-[10px] mt-0.5" style={{ color: 'rgba(148,163,184,0.7)' }}>
-                                Ref: {card.ref}
-                              </p>
+                    <div className="mt-2 ml-9 flex flex-col gap-3">
+                      {cards.map((card, ci) => {
+                        const qty = getQty(card.ref);
+                        const alreadyAdded = addedRefs.has(card.ref);
+                        const hasProductId = card.url.includes('id_product=');
+
+                        return (
+                          <div
+                            key={ci}
+                            className="rounded-2xl overflow-hidden"
+                            style={{
+                              background: '#0D1B2E',
+                              border: '1px solid rgba(0,150,220,0.25)',
+                            }}
+                          >
+                            {/* Product info header */}
+                            <div className="px-3 pt-3 pb-2">
+                              <div className="flex items-start justify-between gap-2 mb-1.5">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-white font-bold text-xs leading-tight">
+                                    {card.name ?? card.ref}
+                                  </p>
+                                  <p className="text-[10px] mt-0.5" style={{ color: 'rgba(148,163,184,0.6)' }}>
+                                    Ref: {card.ref}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{ background: stockColor(card.stock) }}
+                                  />
+                                  <span
+                                    className="text-[10px] font-medium"
+                                    style={{ color: stockColor(card.stock) }}
+                                  >
+                                    {stockLabel(card.stock)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Price row */}
+                              {card.price && card.price !== 'Consultar' && (
+                                <div className="flex items-baseline gap-1.5 mb-2">
+                                  <span
+                                    className="text-base font-extrabold"
+                                    style={{ color: '#00C2E0' }}
+                                  >
+                                    {card.price}
+                                  </span>
+                                  <span className="text-[9px]" style={{ color: 'rgba(148,163,184,0.5)' }}>
+                                    / ud · IVA no incluido
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Qty selector */}
+                              {hasProductId && (card.stock === undefined || card.stock !== 0) && (
+                                <div className="flex items-center gap-2 mb-2.5">
+                                  <span className="text-[10px]" style={{ color: 'rgba(148,163,184,0.7)' }}>
+                                    Cantidad:
+                                  </span>
+                                  <div
+                                    className="flex items-center rounded-lg overflow-hidden"
+                                    style={{ border: '1px solid rgba(0,150,220,0.2)' }}
+                                  >
+                                    <button
+                                      onClick={() => setQty(card.ref, qty - 1)}
+                                      className="w-7 h-6 flex items-center justify-center text-sm font-bold transition-colors"
+                                      style={{ background: 'rgba(0,100,200,0.15)', color: '#60A5FA' }}
+                                    >
+                                      −
+                                    </button>
+                                    <span
+                                      className="w-8 text-center text-xs font-semibold"
+                                      style={{ color: 'white' }}
+                                    >
+                                      {qty}
+                                    </span>
+                                    <button
+                                      onClick={() => setQty(card.ref, qty + 1)}
+                                      className="w-7 h-6 flex items-center justify-center text-sm font-bold transition-colors"
+                                      style={{ background: 'rgba(0,100,200,0.15)', color: '#60A5FA' }}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                  {card.price && card.price !== 'Consultar' && qty > 1 && (
+                                    <span className="text-[10px] font-semibold" style={{ color: '#34D399' }}>
+                                      Total: {(parseFloat(card.price.replace('€','').replace(',','.')) * qty).toFixed(2)}€
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <span
-                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                style={{ background: stockColor(card.stock) }}
-                              />
-                              <span
-                                className="text-[10px] font-medium"
-                                style={{ color: stockColor(card.stock) }}
+
+                            {/* Action buttons */}
+                            <div
+                              className="px-3 pb-3 flex flex-col gap-1.5"
+                            >
+                              {hasProductId && (card.stock === undefined || card.stock !== 0) ? (
+                                <>
+                                  {/* Añadir y seguir comprando */}
+                                  <button
+                                    onClick={() => handleAddToCart(card, false)}
+                                    className="w-full text-center text-[11px] font-bold py-2 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5"
+                                    style={{
+                                      background: alreadyAdded
+                                        ? 'rgba(16,185,129,0.2)'
+                                        : 'linear-gradient(135deg, rgba(0,71,200,0.35), rgba(0,100,180,0.35))',
+                                      color: alreadyAdded ? '#34D399' : '#93C5FD',
+                                      border: alreadyAdded
+                                        ? '1px solid rgba(16,185,129,0.4)'
+                                        : '1px solid rgba(0,100,200,0.35)',
+                                    }}
+                                  >
+                                    <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor">
+                                      <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM5.8 6H20l-1.68 8.39c-.16.8-.85 1.36-1.67 1.36H8.68c-.83 0-1.53-.58-1.67-1.39L5.8 6z"/>
+                                    </svg>
+                                    {alreadyAdded ? '✓ Añadido · Añadir más' : 'Añadir al carrito y seguir comprando'}
+                                  </button>
+
+                                  {/* Añadir y pagar */}
+                                  <button
+                                    onClick={() => handleAddToCart(card, true)}
+                                    className="w-full text-center text-[11px] font-bold py-2 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5"
+                                    style={{
+                                      background: 'linear-gradient(135deg, rgba(16,185,129,0.25), rgba(5,150,105,0.25))',
+                                      color: '#34D399',
+                                      border: '1px solid rgba(16,185,129,0.35)',
+                                    }}
+                                  >
+                                    <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor">
+                                      <path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+                                    </svg>
+                                    Añadir al carrito y pagar
+                                  </button>
+                                </>
+                              ) : (
+                                /* Sin stock o sin ID → solo "Ver producto" */
+                                <a
+                                  href={card.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full text-center text-[11px] font-semibold py-2 rounded-xl transition-all duration-200"
+                                  style={{
+                                    background: 'rgba(0,100,200,0.18)',
+                                    color: '#60A5FA',
+                                    border: '1px solid rgba(0,100,200,0.25)',
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  {card.stock === 0 ? '❌ Sin stock · Ver producto' : 'Consultar disponibilidad'}
+                                </a>
+                              )}
+
+                              {/* Ver ficha técnica */}
+                              <a
+                                href={card.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full text-center text-[10px] py-1.5 rounded-xl transition-all duration-200"
+                                style={{
+                                  background: 'rgba(255,255,255,0.03)',
+                                  color: 'rgba(148,163,184,0.6)',
+                                  border: '1px solid rgba(255,255,255,0.06)',
+                                  textDecoration: 'none',
+                                }}
                               >
-                                {stockLabel(card.stock)}
-                              </span>
+                                Ver ficha técnica en tienda →
+                              </a>
                             </div>
                           </div>
-                          <div className="flex gap-2">
-                            <a
-                              href={card.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl transition-all duration-200"
-                              style={{
-                                background: 'rgba(0,100,200,0.18)',
-                                color: '#60A5FA',
-                                border: '1px solid rgba(0,100,200,0.25)',
-                              }}
-                            >
-                              Ver ficha
-                            </a>
-                            <a
-                              href="https://b2b.esgas.es/carrito"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-1 text-center text-[11px] font-semibold py-1.5 rounded-xl transition-all duration-200"
-                              style={{
-                                background: 'rgba(0,180,100,0.15)',
-                                color: '#34D399',
-                                border: '1px solid rgba(0,180,100,0.22)',
-                              }}
-                            >
-                              Ir al carrito
-                            </a>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
-                  {/* Quick replies after the initial bot message */}
+                  {/* Quick replies after initial bot message */}
                   {msg.id === 'init' && !userHasSpoken && msgIdx === 0 && (
                     <div className="mt-3 ml-9 flex flex-wrap gap-2">
                       {QUICK_REPLIES.map((qr) => (
@@ -529,6 +688,35 @@ export default function Chatbot() {
             <div ref={bottomRef} />
           </div>
 
+          {/* ── Cart summary bar ── */}
+          {cartCount > 0 && (
+            <div
+              className="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
+              style={{
+                background: 'rgba(16,185,129,0.08)',
+                borderTop: '1px solid rgba(16,185,129,0.2)',
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" width={14} height={14} fill="#34D399">
+                  <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM5.8 6H20l-1.68 8.39c-.16.8-.85 1.36-1.67 1.36H8.68c-.83 0-1.53-.58-1.67-1.39L5.8 6z"/>
+                </svg>
+                <span className="text-[11px] font-semibold" style={{ color: '#34D399' }}>
+                  {cartCount} artículo{cartCount !== 1 ? 's' : ''} en tu carrito
+                </span>
+              </div>
+              <a
+                href={PS_CART_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-bold flex items-center gap-1"
+                style={{ color: '#34D399', textDecoration: 'none' }}
+              >
+                Tramitar pedido →
+              </a>
+            </div>
+          )}
+
           {/* ── Input ── */}
           <form
             onSubmit={(e) => {
@@ -554,12 +742,10 @@ export default function Chatbot() {
                 border: '1px solid rgba(255,255,255,0.07)',
               }}
               onFocus={(e) =>
-                ((e.target as HTMLInputElement).style.border =
-                  '1px solid rgba(0,100,200,0.45)')
+                ((e.target as HTMLInputElement).style.border = '1px solid rgba(0,100,200,0.45)')
               }
               onBlur={(e) =>
-                ((e.target as HTMLInputElement).style.border =
-                  '1px solid rgba(255,255,255,0.07)')
+                ((e.target as HTMLInputElement).style.border = '1px solid rgba(255,255,255,0.07)')
               }
               disabled={isTyping}
               autoComplete="off"
@@ -574,9 +760,7 @@ export default function Chatbot() {
                 height: '44px',
                 borderRadius: '14px',
                 background: 'linear-gradient(135deg, #0047C8, #0092C2)',
-                boxShadow: input.trim()
-                  ? '0 4px 18px rgba(0,80,200,0.45)'
-                  : 'none',
+                boxShadow: input.trim() ? '0 4px 18px rgba(0,80,200,0.45)' : 'none',
               }}
               aria-label="Enviar mensaje"
             >
@@ -661,12 +845,8 @@ export default function Chatbot() {
             rel="noopener noreferrer"
             className="underline transition-colors duration-200"
             style={{ color: 'rgba(71,85,105,0.9)' }}
-            onMouseEnter={(e) =>
-              ((e.target as HTMLAnchorElement).style.color = '#00D1FF')
-            }
-            onMouseLeave={(e) =>
-              ((e.target as HTMLAnchorElement).style.color = 'rgba(71,85,105,0.9)')
-            }
+            onMouseEnter={(e) => ((e.target as HTMLAnchorElement).style.color = '#00D1FF')}
+            onMouseLeave={(e) => ((e.target as HTMLAnchorElement).style.color = 'rgba(71,85,105,0.9)')}
           >
             Flownexion
           </a>

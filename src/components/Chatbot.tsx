@@ -559,28 +559,30 @@ export default function Chatbot() {
                                 </>
                               ) : realStock === 0 ? (
                                 <div className="w-full text-center text-[11px] py-2 rounded-xl" style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171', border: '1px solid rgba(239,68,68,0.2)' }}>
-                                  ❌ Sin stock en este momento
+                                  Sin stock en este momento
                                 </div>
-                              ) : null}
+                              ) : (
+                                /* Sin datos PS reales: mostrar link de búsqueda siempre */
+                                <a href={card.url || PS_HOME} target="_blank" rel="noopener noreferrer"
+                                  className="w-full text-center text-[11px] font-semibold py-2 rounded-xl flex items-center justify-center gap-1.5"
+                                  style={{ background: 'linear-gradient(135deg,rgba(0,71,200,0.25),rgba(0,100,180,0.25))', color: '#93C5FD', border: '1px solid rgba(0,100,200,0.3)', textDecoration: 'none' }}>
+                                  <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                                  Buscar en tienda ESGAS
+                                </a>
+                              )}
 
-                              {/* Ficha técnica */}
-                              {productUrl ? (
+                              {/* Ficha técnica — solo si tenemos URL real con id_product */}
+                              {productUrl && productUrl !== card.url && (
                                 <a href={productUrl} target="_blank" rel="noopener noreferrer"
                                   className="w-full text-center text-[10px] py-1.5 rounded-xl"
-                                  style={{ background: 'rgba(0,100,200,0.1)', color: '#60A5FA', border: '1px solid rgba(0,100,200,0.18)', textDecoration: 'none' }}>
+                                  style={{ background: 'rgba(0,100,200,0.08)', color: '#60A5FA', border: '1px solid rgba(0,100,200,0.15)', textDecoration: 'none' }}>
                                   Ver ficha técnica en tienda →
-                                </a>
-                              ) : (
-                                <a href={PS_HOME} target="_blank" rel="noopener noreferrer"
-                                  className="w-full text-center text-[10px] py-1.5 rounded-xl"
-                                  style={{ background: 'rgba(255,255,255,0.03)', color: 'rgba(148,163,184,0.5)', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none' }}>
-                                  Ir a la tienda ESGAS →
                                 </a>
                               )}
 
                               {!ps && (
-                                <p className="text-[9px] text-center mt-0.5" style={{ color: 'rgba(148,163,184,0.3)' }}>
-                                  Datos estimados · Configura el webservice de PS para datos reales
+                                <p className="text-[9px] text-center mt-0.5" style={{ color: 'rgba(148,163,184,0.25)' }}>
+                                  Activa el Webservice de PS para precio y stock en tiempo real
                                 </p>
                               )}
                             </div>

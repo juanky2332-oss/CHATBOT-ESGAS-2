@@ -354,7 +354,7 @@ export default function Chatbot() {
         const psQueries = [t, userRef].filter((x): x is string => Boolean(x?.trim()));
         const psPromise = psQueries.length > 0 ? fetchPSProducts(psQueries) : Promise.resolve(new Map<string, PSData>());
 
-        const body: Record<string, string> = { sessionId, message: `${SYSTEM_OVERRIDE}\n${userQuery}` };
+        const body: Record<string, string> = { sessionId, message: userQuery };
         if (img) { body.image = img.base64; body.imageType = img.mimeType; }
 
         const [psNewData, res] = await Promise.all([

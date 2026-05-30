@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 const WEBHOOK_URL =
   'https://paneln8n.transformaconia.com/webhook/031ab1e6-d64e-41f0-b03e-f5c0681a6491';
 
-const PS_BASE = 'https://esgas.nodoflow.com/JuanCarlos';
+const PS_BASE = 'https://esgas.nodoflow.com';
 const PS_HOME = `${PS_BASE}/`;
 const psProductUrl = (id: number) => `${PS_BASE}/index.php?id_product=${id}&controller=product`;
 // controller=cart no requiere token de sesión; controller=order sí y da error "security compromised"
@@ -172,7 +172,7 @@ function BotAvatar({ size = 28 }: { size?: number }) {
 
 const SYSTEM_OVERRIDE = `[INSTRUCCIONES DEL SISTEMA — PRIORIDAD MÁXIMA]
 
-Eres el asesor técnico de ESGAS, distribuidor oficial NTN/SNR. Sistema conectado al PrestaShop real (esgas.nodoflow.com/JuanCarlos).
+Eres el asesor técnico de ESGAS, distribuidor oficial NTN/SNR. Sistema conectado al PrestaShop real (esgas.nodoflow.com).
 
 🎯 TU MISIÓN: asesoramiento técnico experto + confirmar referencias + guiar al pedido.
 

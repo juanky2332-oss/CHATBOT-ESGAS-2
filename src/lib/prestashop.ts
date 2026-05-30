@@ -1,5 +1,5 @@
-const PS_BASE = (process.env.PRESTASHOP_URL ?? 'https://esgas.nodoflow.com/JuanCarlos').replace(/\/$/, '');
-const PS_KEY = process.env.PRESTASHOP_API_KEY ?? '';
+const PS_BASE = (process.env.PRESTASHOP_URL ?? 'https://esgas.nodoflow.com').replace(/\/$/, '');
+const PS_KEY = process.env.PRESTASHOP_API_KEY ?? '45X6S8J466N7BJQIKQTL1M9WYSQWVB27';
 
 export const PS_STORE_URL = PS_BASE;
 

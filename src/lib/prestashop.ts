@@ -3,17 +3,14 @@ const PS_KEY = process.env.PRESTASHOP_API_KEY ?? '45X6S8J466N7BJQIKQTL1M9WYSQWVB
 
 export const PS_STORE_URL = PS_BASE;
 
-// Product page — only valid when we have the real product ID from the API
 export function psProductUrl(id: number) {
   return `${PS_BASE}/index.php?id_product=${id}&controller=product`;
 }
 
-// Cart / checkout page
 export function psCartUrl() {
   return `${PS_BASE}/index.php?controller=order`;
 }
 
-// Shop homepage — safe fallback when no product ID available
 export function psHomeUrl() {
   return `${PS_BASE}/`;
 }
@@ -49,7 +46,10 @@ async function psGetStock(productId: number): Promise<number> {
     if (!res.ok) return -1;
     const json = (await res.json()) as { stock_availables?: { quantity: string }[] };
     const items = json.stock_availables ?? [];
-    return items.length ? parseInt(items[0].quantity, 10) : 0;
+    if (!items.length) return -1;
+    const qty = parseInt(items[0].quantity, 10);
+    // B2B: stock=0 means "consultar" — distributor can always source from supplier
+    return qty === 0 ? -1 : qty;
   } catch {
     return -1;
   }

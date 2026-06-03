@@ -11,16 +11,20 @@ Agent, consulta PrestaShop y devuelve la respuesta.
 Crea estas credenciales **una sola vez** en n8n → **Credentials**.
 Nunca las dupliques en GitHub ni en Vercel.
 
-### 1.1 PrestaShop Webservice (HTTP Basic Auth)
+### 1.1 PrestaShop Webservice (HTTP Header Auth)
 
-- **Type**: `Header Auth` o `HTTP Basic Auth`
-- **User**: `45X6S8J466N7BJQIKQTL1M9WYSQWVB27` (la API key actúa como usuario)
-- **Password**: (vacío)
-- **Alternativa**: `Authorization: Basic <base64(API_KEY + ":")>`
+- **Type**: `Header Auth`
+- **Header name**: `Authorization`
+- **Header value**: `Basic <base64(API_KEY + ":")>`
 
-> ⚠️ **Rota la clave** `45X6S8J466N7BJQIKQTL1M9WYSQWVB27` cuanto antes:
-> ha estado expuesta en git history. Genera una nueva en PrestaShop →
-> Parámetros avanzados → Webservice y reemplaza la credencial en n8n.
+Para calcular el valor:
+```
+echo -n "TU_API_KEY:" | base64
+```
+
+> ℹ️ La API key va **exclusivamente** en n8n → Credentials.
+> Nunca en el código ni en GitHub.
+> Puedes generarla/rotarla en PrestaShop → Parámetros avanzados → Webservice.
 
 ### 1.2 Modelo de IA
 
@@ -282,9 +286,9 @@ El frontend lee `data.response` (o como fallback `data.output`/`data.text`).
 
 ## 7. Checklist de seguridad
 
-- [ ] API key de PrestaShop rotada (la antigua está en git history)
-- [ ] Nueva API key SOLO en n8n Credentials
+- [x] API key de PrestaShop configurada SOLO en n8n Credentials
+- [x] Sin claves en el código fuente ni en este fichero
 - [ ] Webhook de n8n protegido (autenticación opcional vía header
       compartido entre Vercel y n8n si quieres reforzar)
-- [ ] `.env.local` en `.gitignore` (ya lo está)
-- [ ] Sin claves en commits — verificar con `git log -p | grep -i key`
+- [x] `.env.local` en `.gitignore` (ya lo está)
+- [x] Sin claves en commits — verificar con `git log -p | grep -i key`

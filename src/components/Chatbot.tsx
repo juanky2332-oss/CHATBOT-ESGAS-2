@@ -3,12 +3,17 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 // ─── ÚNICA URL DE CONEXIÓN ────────────────────────────────────────────────────
-// n8n es quien consulta PrestaShop, obtiene stock real y precio real.
-// El frontend NO toca la API de PS directamente para precios ni stock.
+// n8n es el "cerebro": consulta PrestaShop, obtiene stock y precio reales,
+// ejecuta el AI Agent y devuelve la respuesta + tarjetas de producto.
+// El frontend NUNCA toca la API de PrestaShop directamente.
+// Configurar en Vercel → Environment Variables:
+//   NEXT_PUBLIC_N8N_WEBHOOK_URL=https://paneln8n.transformaconia.com/webhook/...
+//   NEXT_PUBLIC_PS_BASE=https://esgas.nodoflow.com
 const WEBHOOK_URL =
+  process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL ??
   'https://paneln8n.transformaconia.com/webhook/031ab1e6-d64e-41f0-b03e-f5c0681a6491';
 
-const PS_BASE = 'https://esgas.nodoflow.com';
+const PS_BASE = process.env.NEXT_PUBLIC_PS_BASE ?? 'https://esgas.nodoflow.com';
 const PS_HOME = `${PS_BASE}/`;
 const psProductUrl = (id: number) =>
   `${PS_BASE}/index.php?id_product=${id}&controller=product`;

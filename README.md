@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Chatbot ESGAS
 
-## Getting Started
+Asistente técnico-comercial embebido en la tienda PrestaShop de ESGAS.
+Responde preguntas técnicas sobre productos industriales de transmisión
+(rodamientos, correas, retenes, etc.), consulta stock y precio en tiempo
+real desde PrestaShop, y guía la venta hacia las marcas que distribuye
+ESGAS cuando el cliente pregunta por marcas que no comercializa.
 
-First, run the development server:
+## Arquitectura
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+┌──────────────┐    POST     ┌─────────────────┐    REST API   ┌──────────────┐
+│  Navegador   │ ──────────► │   n8n webhook    │ ────────────► │  PrestaShop  │
+│ (Next.js UI) │             │   AI Agent       │               │   (API key)  │
+└──────────────┘             │   + búsqueda PS  │               └──────────────┘
+                             └─────────────────┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **GitHub / Vercel (este repo)**: solo la UI. Logo, estilos, layout, animaciones.
+- **n8n**: el "cerebro". AI Agent + consultas a PrestaShop + memoria de conversación.
+- **PrestaShop**: única fuente de verdad para precio y stock.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Dónde van las credenciales
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Credencial | Dónde se guarda | Por qué |
+| --- | --- | --- |
+| API key de PrestaShop | **n8n → Credentials → HTTP Basic Auth** | Las llamadas a la API se hacen server-to-server desde n8n. Nunca llega al navegador. |
+| API key del modelo (OpenAI/Anthropic/Gemini) | **n8n → Credentials** | El AI Agent vive en n8n. |
+| URL del webhook n8n | **Vercel → Env Vars** (`NEXT_PUBLIC_N8N_WEBHOOK_URL`) | Es pública (el navegador la usa). No es secreta. |
+| URL de la tienda | **Vercel → Env Vars** (`NEXT_PUBLIC_PS_BASE`) | Pública. |
 
-## Learn More
+> **NUNCA** pongas la API key de PrestaShop en este repositorio ni en Vercel.
 
-To learn more about Next.js, take a look at the following resources:
+## Variables de entorno (Vercel)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Copia `.env.example` y configura en Vercel → Settings → Environment Variables:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `NEXT_PUBLIC_N8N_WEBHOOK_URL` — webhook de producción de n8n
+- `NEXT_PUBLIC_PS_BASE` — URL raíz de la tienda PrestaShop
 
-## Deploy on Vercel
+## Configurar n8n
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+La guía completa (system prompt, nodos, credenciales, formato de respuesta)
+está en [`docs/N8N_SETUP.md`](docs/N8N_SETUP.md).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Desarrollo local
+
+```bash
+npm install
+cp .env.example .env.local   # editar valores
+npm run dev
+```
+
+Abrir [http://localhost:3000](http://localhost:3000).
+
+## Deploy
+
+Push a `main` ⇒ Vercel hace deploy automático.

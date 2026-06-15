@@ -5,13 +5,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 const WEBHOOK_URL =
   'https://paneln8n.transformaconia.com/webhook/031ab1e6-d64e-41f0-b03e-f5c0681a6491';
 
-const PS_BASE = 'https://esgas.nodoflow.com/JuanCarlos';
-const PS_HOME = `${PS_BASE}/`;
-const psProductUrl = (id: number) => `${PS_BASE}/index.php?id_product=${id}&controller=product`;
-// controller=cart no requiere token de sesión; controller=order sí y da error "security compromised"
-const PS_CART_PAGE = `${PS_BASE}/index.php?controller=cart`;
-const buildAddToCartUrl = (id: number, qty: number) =>
-  `${PS_BASE}/index.php?controller=cart&add=1&id_product=${id}&qty=${qty}`;
+const PS_STORE_BASE = 'https://b2b.esgas.es';
+const PS_CART_URL = `${PS_STORE_BASE}/carrito?action=show`;
+const SHIPPING_FREE_THRESHOLD = 80;
 
 type Message = {
   id: string;
@@ -34,8 +30,18 @@ interface PSData {
   name: string;
   reference: string;
   price: number;
+  originalPrice: number;
+  discountPct: number | null;
   stock: number;
   productUrl: string;
+}
+
+interface PSCustomerInfo {
+  id: number;
+  groupId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
 }
 
 type CartItem = {
@@ -172,14 +178,14 @@ function BotAvatar({ size = 28 }: { size?: number }) {
 
 const SYSTEM_OVERRIDE = `[INSTRUCCIONES DEL SISTEMA — PRIORIDAD MÁXIMA]
 
-Eres el asesor técnico de ESGAS, distribuidor oficial NTN/SNR. Sistema conectado al PrestaShop real (esgas.nodoflow.com/JuanCarlos).
+Eres el asesor técnico de ESGAS, distribuidor oficial NTN/SNR. Sistema conectado al PrestaShop real (b2b.esgas.es).
 
 🎯 TU MISIÓN: asesoramiento técnico experto + confirmar referencias + guiar al pedido.
 
 📦 FORMATO OBLIGATORIO al final para cualquier producto:
 
 \`\`\`products
-[{"ref":"REFERENCIA_EXACTA","name":"Nombre","url":"${PS_HOME}"}]
+[{"ref":"REFERENCIA_EXACTA","name":"Nombre","url":"https://b2b.esgas.es/"}]
 \`\`\`
 
 NOTA: El frontend sustituirá la URL con la ficha real del producto desde la API de PrestaShop.
@@ -241,17 +247,19 @@ function buildFallbackResponse(userText: string): string {
   return `**${ref}** — Rodamiento rígido de bolas NTN/SNR${suffix}\n\n📦 **Stock:** ${stock} unidades disponibles\n💶 **Precio:** ${price.toFixed(2)} €/ud. (IVA no incluido)\n🚚 **Plazo:** Envío en 24-48 h\n\n¿Confirmo ${qtyClause}? Puedo preparar el pedido ahora mismo.`;
 }
 
-async function fetchPSProducts(queries: string[]): Promise<Map<string, PSData>> {
+async function fetchPSProducts(queries: string[], groupId?: number): Promise<Map<string, PSData>> {
   const map = new Map<string, PSData>();
   const unique = [...new Set(queries.filter(Boolean).map((q) => q.trim()))];
   await Promise.all(
     unique.map(async (q) => {
       try {
-        const res = await fetch(`/api/prestashop/search?q=${encodeURIComponent(q)}`);
+        const params = new URLSearchParams({ q });
+        if (groupId !== undefined) params.set('groupId', String(groupId));
+        const res = await fetch(`/api/prestashop/search?${params}`);
         if (!res.ok) return;
         const data = await res.json() as { products?: PSData[] };
         (data.products ?? []).forEach((p) => map.set(p.reference.toUpperCase(), p));
-      } catch { /* PS no configurado, usa fallback */ }
+      } catch { /* PS no configurado */ }
     })
   );
   return map;
@@ -270,6 +278,17 @@ export default function Chatbot() {
   const [psCache, setPsCache] = useState<Map<string, PSData>>(new Map());
   const [cart, setCart] = useState<CartItem[]>([]);
   const [qtys, setQtys] = useState<Record<string, number>>({});
+  const [addedRefs, setAddedRefs] = useState<Record<string, boolean>>({});
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [fallbackLinks, setFallbackLinks] = useState<{ ref: string; url: string; qty: number }[] | null>(null);
+  const [customer, setCustomer] = useState<PSCustomerInfo | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try { return JSON.parse(localStorage.getItem('esgas-customer') ?? 'null') as PSCustomerInfo | null; }
+    catch { return null; }
+  });
+  const [loginEmail, setLoginEmail] = useState('');
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   const [sessionId] = useState<string>(() => {
     if (typeof window === 'undefined') return `s-${Date.now()}`;
@@ -316,19 +335,115 @@ export default function Chatbot() {
   const setQtyFor = (ref: string, val: number) =>
     setQtys((prev) => ({ ...prev, [ref]: Math.max(1, val) }));
 
-  const handleAddToCart = useCallback((ps: PSData, card: ProductCard, buyNow: boolean) => {
-    const qty = qtys[card.ref] ?? 1;
+  const handleLogin = useCallback(async (email: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    setIsLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch(`/api/prestashop/customer?email=${encodeURIComponent(trimmed)}`);
+      if (!res.ok) {
+        setLoginError('Email no encontrado en ESGAS. Verifica que sea el mismo que usas en b2b.esgas.es');
+        return;
+      }
+      const data = await res.json() as PSCustomerInfo;
+      setCustomer(data);
+      localStorage.setItem('esgas-customer', JSON.stringify(data));
+      setLoginEmail('');
+      setLoginError('');
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `b${Date.now()}`,
+          role: 'bot',
+          content: `✅ ¡Hola, ${data.firstName}! Te he identificado como cliente B2B de ESGAS. Ahora veré tus precios específicos y podré preparar el pedido directamente en tu cuenta.`,
+          ts: new Date(),
+        },
+      ]);
+    } catch {
+      setLoginError('Error de conexión. Inténtalo de nuevo.');
+    } finally {
+      setIsLoginLoading(false);
+    }
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    setCustomer(null);
+    localStorage.removeItem('esgas-customer');
+  }, []);
+
+  const addItemToCart = useCallback((ps: PSData, ref: string, qty: number) => {
+    const key = ref.toUpperCase();
     setCart((prev) => {
-      const key = card.ref.toUpperCase();
       const existing = prev.find((i) => i.ref === key);
       if (existing) return prev.map((i) => i.ref === key ? { ...i, qty: i.qty + qty } : i);
       return [...prev, { psId: ps.id, ref: key, name: ps.name, qty, price: ps.price }];
     });
-    window.open(buildAddToCartUrl(ps.id, qty), '_blank', 'noopener,noreferrer');
-    if (buyNow) {
-      setTimeout(() => window.open(PS_CART_PAGE, '_blank', 'noopener,noreferrer'), 400);
+  }, []);
+
+  const handleAddToCart = useCallback((ps: PSData, card: ProductCard) => {
+    const qty = qtys[card.ref] ?? 1;
+    addItemToCart(ps, card.ref, qty);
+    const key = card.ref.toUpperCase();
+    setAddedRefs((prev) => ({ ...prev, [key]: true }));
+    setTimeout(() => setAddedRefs((prev) => { const n = { ...prev }; delete n[key]; return n; }), 2500);
+  }, [qtys, addItemToCart]);
+
+  const handleCheckout = useCallback(async (ps: PSData | null, card: ProductCard | null) => {
+    if (ps && card) addItemToCart(ps, card.ref, qtys[card.ref] ?? 1);
+    setFallbackLinks(null);
+    setIsCheckingOut(true);
+    try {
+      const allItems = cart.map((i) => ({ productId: i.psId, qty: i.qty }));
+      if (ps && card) {
+        const key = card.ref.toUpperCase();
+        if (!cart.find((i) => i.ref === key)) {
+          allItems.push({ productId: ps.id, qty: qtys[card.ref] ?? 1 });
+        }
+      }
+      if (!allItems.length) { window.open(PS_CART_URL, '_blank', 'noopener,noreferrer'); return; }
+
+      const body: { items: { productId: number; qty: number }[]; customerId?: number } = { items: allItems };
+      if (customer?.id) body.customerId = customer.id;
+
+      const res = await fetch('/api/prestashop/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as {
+        cartId?: string | null;
+        cartUrl?: string;
+        itemAddUrls?: string[];
+      };
+
+      if (data.cartId) {
+        // WS cart created successfully — open the recovery URL
+        window.open(data.cartUrl || PS_CART_URL, '_blank', 'noopener,noreferrer');
+      } else {
+        // WS cart failed — show individual add-to-cart links as fallback
+        const fullCart = [...cart];
+        if (ps && card && !cart.find((i) => i.ref === card.ref.toUpperCase())) {
+          fullCart.push({ psId: ps.id, ref: card.ref, name: ps.name, qty: qtys[card.ref] ?? 1, price: ps.price });
+        }
+        if (data.itemAddUrls?.length) {
+          setFallbackLinks(
+            fullCart.map((item, idx) => ({
+              ref: item.ref,
+              qty: item.qty,
+              url: data.itemAddUrls![idx] ?? `${PS_STORE_BASE}/index.php?controller=cart&add=1&id_product=${item.psId}&id_product_attribute=0&qty=${item.qty}&action=add`,
+            }))
+          );
+        } else {
+          window.open(PS_CART_URL, '_blank', 'noopener,noreferrer');
+        }
+      }
+    } catch {
+      window.open(PS_CART_URL, '_blank', 'noopener,noreferrer');
+    } finally {
+      setIsCheckingOut(false);
     }
-  }, [qtys]);
+  }, [cart, qtys, customer, addItemToCart]);
 
   const send = useCallback(
     async (text: string, imageData?: { base64: string; dataUrl: string; mimeType: string } | null) => {
@@ -352,7 +467,9 @@ export default function Chatbot() {
         const userQuery = t || 'Identifica este artículo de la imagen, dame referencia exacta y botón de compra.';
         const userRef = extractReference(t);
         const psQueries = [t, userRef].filter((x): x is string => Boolean(x?.trim()));
-        const psPromise = psQueries.length > 0 ? fetchPSProducts(psQueries) : Promise.resolve(new Map<string, PSData>());
+        const psPromise = psQueries.length > 0
+          ? fetchPSProducts(psQueries, customer?.groupId)
+          : Promise.resolve(new Map<string, PSData>());
 
         const body: Record<string, string> = { sessionId, message: userQuery };
         if (img) { body.image = img.base64; body.imageType = img.mimeType; }
@@ -373,7 +490,7 @@ export default function Chatbot() {
 
         const { cards } = parseProductCards(reply);
         if (cards.length > 0) {
-          fetchPSProducts(cards.map((c) => c.ref)).then((more) => {
+          fetchPSProducts(cards.map((c) => c.ref), customer?.groupId).then((more) => {
             if (more.size > 0) setPsCache((prev) => new Map([...prev, ...more]));
           });
         }
@@ -383,7 +500,7 @@ export default function Chatbot() {
         setIsTyping(false);
       }
     },
-    [isTyping, sessionId, isOpen, pendingImage],
+    [isTyping, sessionId, isOpen, pendingImage, customer],
   );
 
   const fmt = (d: Date) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -412,20 +529,33 @@ export default function Chatbot() {
               <p className="font-bold text-white text-sm tracking-tight">Asistente ESGAS</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ animation: 'esgas-pulse 2.5s ease-in-out infinite' }} />
-                <span className="text-[11px]" style={{ color: 'rgba(148,163,184,0.85)' }}>Disponible · PrestaShop en tiempo real</span>
+                {customer ? (
+                  <span className="text-[11px] flex items-center gap-1.5">
+                    <span style={{ color: '#34D399' }}>● {customer.firstName} {customer.lastName}</span>
+                    <button onClick={handleLogout}
+                      className="text-[9px] px-1 py-0.5 rounded"
+                      style={{ color: 'rgba(148,163,184,0.5)', background: 'rgba(255,255,255,0.04)', border: 'none', cursor: 'pointer' }}>
+                      salir
+                    </button>
+                  </span>
+                ) : (
+                  <span className="text-[11px]" style={{ color: 'rgba(148,163,184,0.85)' }}>Disponible · PrestaShop en tiempo real</span>
+                )}
               </div>
             </div>
             {cartTotalItems > 0 && (
-              <a href={PS_CART_PAGE} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
-                style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.25)', textDecoration: 'none' }}
-                title="Ver carrito en PrestaShop">
+              <button
+                onClick={() => handleCheckout(null, null)}
+                disabled={isCheckingOut}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all duration-200 disabled:opacity-60"
+                style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.25)', cursor: 'pointer' }}
+                title="Tramitar pedido en PrestaShop">
                 <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="#34D399" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
                   <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                 </svg>
                 <span className="text-[11px] font-bold" style={{ color: '#34D399' }}>{cartTotalItems}</span>
-              </a>
+              </button>
             )}
             <button onClick={toggleOpen} className="flex items-center justify-center rounded-xl transition-all duration-200"
               style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
@@ -473,7 +603,7 @@ export default function Chatbot() {
                         const realPriceNum = ps?.price ?? (typeof card.price === 'number' ? card.price : undefined);
                         const realPriceStr = typeof card.price === 'string' && card.price !== 'Consultar' ? card.price : undefined;
                         const realName = ps?.name ?? card.name ?? card.ref;
-                        const productUrl = ps ? psProductUrl(ps.id) : (card.url.includes('id_product=') ? card.url : null);
+                        const productUrl = ps ? ps.productUrl : (card.url.includes('id_product=') ? card.url : null);
                         const qty = getQty(card.ref);
                         const inCart = cart.find((i) => i.ref === card.ref.toUpperCase());
                         const canBuy = ps && realStock !== 0;
@@ -502,16 +632,28 @@ export default function Chatbot() {
 
                               {/* Precio */}
                               {(realPriceNum !== undefined || realPriceStr) && (
-                                <div className="flex items-baseline gap-1.5 mb-2">
-                                  <span className="text-base font-extrabold" style={{ color: ps ? '#00C2E0' : '#94A3B8' }}>
-                                    {realPriceNum !== undefined ? `${realPriceNum.toFixed(2)} €` : realPriceStr}
-                                  </span>
-                                  <span className="text-[9px]" style={{ color: 'rgba(148,163,184,0.4)' }}>
-                                    / ud. IVA no incluido{!ps ? ' (est.)' : ''}
-                                  </span>
+                                <div className="mb-2">
+                                  <div className="flex items-baseline flex-wrap gap-1.5">
+                                    <span className="text-base font-extrabold" style={{ color: ps ? '#00C2E0' : '#94A3B8' }}>
+                                      {realPriceNum !== undefined ? `${realPriceNum.toFixed(2)} €` : realPriceStr}
+                                    </span>
+                                    {ps?.discountPct && ps.originalPrice > ps.price && (
+                                      <>
+                                        <span className="text-xs line-through" style={{ color: 'rgba(148,163,184,0.35)' }}>
+                                          {ps.originalPrice.toFixed(2)} €
+                                        </span>
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold" style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399' }}>
+                                          -{Math.round(ps.discountPct * 100)}% B2B
+                                        </span>
+                                      </>
+                                    )}
+                                    <span className="text-[9px]" style={{ color: 'rgba(148,163,184,0.4)' }}>
+                                      / ud. IVA no incluido{!ps ? ' (est.)' : ''}
+                                    </span>
+                                  </div>
                                   {realPriceNum !== undefined && qty > 1 && (
-                                    <span className="text-[10px] font-semibold" style={{ color: '#34D399' }}>
-                                      · {(realPriceNum * qty).toFixed(2)} € total
+                                    <span className="text-[10px] font-semibold block mt-0.5" style={{ color: '#34D399' }}>
+                                      Total {qty} uds: {(realPriceNum * qty).toFixed(2)} €
                                     </span>
                                   )}
                                 </div>
@@ -542,28 +684,64 @@ export default function Chatbot() {
 
                             {/* Botones de acción */}
                             <div className="px-3 pb-3 flex flex-col gap-1.5">
-                              {canBuy ? (
-                                <>
-                                  <button onClick={() => handleAddToCart(ps!, card, false)}
-                                    className="w-full text-[11px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5"
-                                    style={{ background: inCart ? 'rgba(16,185,129,0.2)' : 'linear-gradient(135deg,rgba(0,71,200,0.35),rgba(0,100,180,0.35))', color: inCart ? '#34D399' : '#93C5FD', border: inCart ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(0,100,200,0.35)' }}>
-                                    <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM5.8 6H20l-1.68 8.39c-.16.8-.85 1.36-1.67 1.36H8.68c-.83 0-1.53-.58-1.67-1.39L5.8 6z"/></svg>
-                                    {inCart ? '✓ Añadido · Añadir más' : 'Añadir al carrito y seguir comprando'}
-                                  </button>
-                                  <button onClick={() => handleAddToCart(ps!, card, true)}
-                                    className="w-full text-[11px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5"
-                                    style={{ background: 'linear-gradient(135deg,rgba(16,185,129,0.25),rgba(5,150,105,0.25))', color: '#34D399', border: '1px solid rgba(16,185,129,0.35)' }}>
-                                    <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
-                                    Añadir al carrito y pagar
-                                  </button>
-                                </>
-                              ) : realStock === 0 ? (
+                              {canBuy ? (() => {
+                                const justAdded = addedRefs[card.ref.toUpperCase()];
+                                return (
+                                  <>
+                                    {/* Añadir al carrito — botón de acción, no link */}
+                                    <button
+                                      onClick={() => handleAddToCart(ps!, card)}
+                                      className="w-full text-[11px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all duration-300"
+                                      style={{
+                                        background: justAdded
+                                          ? 'rgba(16,185,129,0.3)'
+                                          : inCart
+                                            ? 'rgba(16,185,129,0.15)'
+                                            : 'linear-gradient(135deg,rgba(0,71,200,0.35),rgba(0,100,180,0.35))',
+                                        color: justAdded ? '#34D399' : inCart ? '#6EE7B7' : '#93C5FD',
+                                        border: justAdded
+                                          ? '1px solid rgba(16,185,129,0.5)'
+                                          : inCart
+                                            ? '1px solid rgba(16,185,129,0.3)'
+                                            : '1px solid rgba(0,100,200,0.35)',
+                                      }}>
+                                      {justAdded ? (
+                                        <>
+                                          <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                                          ¡Añadido al carrito!
+                                        </>
+                                      ) : (
+                                        <>
+                                          <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM5.8 6H20l-1.68 8.39c-.16.8-.85 1.36-1.67 1.36H8.68c-.83 0-1.53-.58-1.67-1.39L5.8 6z"/></svg>
+                                          {inCart ? `✓ Ya en carrito · Añadir ${qtys[card.ref] ?? 1} más` : 'Añadir al carrito'}
+                                        </>
+                                      )}
+                                    </button>
+
+                                    {/* Ir a pagar — crea carrito WS y abre checkout */}
+                                    <button
+                                      onClick={() => handleCheckout(ps!, card)}
+                                      disabled={isCheckingOut}
+                                      className="w-full text-[11px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 disabled:opacity-60"
+                                      style={{ background: 'linear-gradient(135deg,rgba(16,185,129,0.25),rgba(5,150,105,0.25))', color: '#34D399', border: '1px solid rgba(16,185,129,0.35)' }}>
+                                      {isCheckingOut ? (
+                                        <span style={{ animation: 'esgas-pulse 1s infinite' }}>Preparando pedido…</span>
+                                      ) : (
+                                        <>
+                                          <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+                                          {cart.length > 0 ? 'Añadir y pagar todo el carrito' : 'Ir al carrito y pagar'}
+                                        </>
+                                      )}
+                                    </button>
+                                  </>
+                                );
+                              })() : realStock === 0 ? (
                                 <div className="w-full text-center text-[11px] py-2 rounded-xl" style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171', border: '1px solid rgba(239,68,68,0.2)' }}>
                                   Sin stock en este momento
                                 </div>
                               ) : (
                                 /* Sin datos PS reales: mostrar link de búsqueda siempre */
-                                <a href={card.url || PS_HOME} target="_blank" rel="noopener noreferrer"
+                                <a href={card.url || PS_STORE_BASE} target="_blank" rel="noopener noreferrer"
                                   className="w-full text-center text-[11px] font-semibold py-2 rounded-xl flex items-center justify-center gap-1.5"
                                   style={{ background: 'linear-gradient(135deg,rgba(0,71,200,0.25),rgba(0,100,180,0.25))', color: '#93C5FD', border: '1px solid rgba(0,100,200,0.3)', textDecoration: 'none' }}>
                                   <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -572,17 +750,17 @@ export default function Chatbot() {
                               )}
 
                               {/* Ficha técnica — solo si tenemos URL real con id_product */}
-                              {productUrl && productUrl !== card.url && (
+                              {productUrl && (
                                 <a href={productUrl} target="_blank" rel="noopener noreferrer"
                                   className="w-full text-center text-[10px] py-1.5 rounded-xl"
                                   style={{ background: 'rgba(0,100,200,0.08)', color: '#60A5FA', border: '1px solid rgba(0,100,200,0.15)', textDecoration: 'none' }}>
-                                  Ver ficha técnica en tienda →
+                                  Ver ficha técnica en b2b.esgas.es →
                                 </a>
                               )}
 
-                              {!ps && (
+                              {ps && (
                                 <p className="text-[9px] text-center mt-0.5" style={{ color: 'rgba(148,163,184,0.25)' }}>
-                                  Activa el Webservice de PS para precio y stock en tiempo real
+                                  🔒 Asegúrate de estar conectado en b2b.esgas.es
                                 </p>
                               )}
                             </div>
@@ -604,6 +782,30 @@ export default function Chatbot() {
             <div ref={bottomRef} />
           </div>
 
+          {fallbackLinks && (
+            <div className="flex-shrink-0 px-4 py-3" style={{ background: '#0A1A2B', borderTop: '1px solid rgba(245,158,11,0.25)' }}>
+              <div className="flex items-start justify-between mb-2">
+                <p className="text-[11px] font-bold" style={{ color: '#F59E0B' }}>
+                  ⚠️ Añade los artículos manualmente (sesión iniciada en b2b.esgas.es)
+                </p>
+                <button onClick={() => setFallbackLinks(null)} style={{ color: 'rgba(148,163,184,0.4)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1 }}>✕</button>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {fallbackLinks.map((link, i) => (
+                  <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2 rounded-xl text-[11px] font-semibold"
+                    style={{ background: 'rgba(245,158,11,0.1)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.2)', textDecoration: 'none' }}>
+                    <span>{link.ref} × {link.qty}</span>
+                    <span style={{ color: 'rgba(245,158,11,0.6)', fontSize: '10px' }}>Añadir →</span>
+                  </a>
+                ))}
+              </div>
+              <p className="text-[9px] mt-2" style={{ color: 'rgba(148,163,184,0.4)' }}>
+                Cada enlace añade el artículo a tu carrito en b2b.esgas.es
+              </p>
+            </div>
+          )}
+
           {cartTotalItems > 0 && (
             <div className="flex-shrink-0 px-4 py-2.5 flex items-center justify-between gap-3"
               style={{ background: '#06101C', borderTop: '1px solid rgba(16,185,129,0.15)' }}>
@@ -611,13 +813,29 @@ export default function Chatbot() {
                 <p className="text-[11px] font-semibold" style={{ color: '#34D399' }}>
                   🛒 {cartTotalItems} artículo{cartTotalItems !== 1 ? 's' : ''} en tu carrito
                 </p>
-                {cartTotalPrice > 0 && <p className="text-[10px]" style={{ color: 'rgba(148,163,184,0.5)' }}>aprox. {cartTotalPrice.toFixed(2)} € s/IVA</p>}
+                {cartTotalPrice > 0 && (
+                  <p className="text-[10px]" style={{ color: 'rgba(148,163,184,0.5)' }}>
+                    aprox. {cartTotalPrice.toFixed(2)} € s/IVA
+                  </p>
+                )}
+                {cartTotalPrice > 0 && cartTotalPrice < SHIPPING_FREE_THRESHOLD && (
+                  <p className="text-[10px] font-medium mt-0.5" style={{ color: '#F59E0B' }}>
+                    🚚 Añade {(SHIPPING_FREE_THRESHOLD - cartTotalPrice).toFixed(2)} € más para envío gratis
+                  </p>
+                )}
+                {cartTotalPrice >= SHIPPING_FREE_THRESHOLD && (
+                  <p className="text-[10px] font-medium mt-0.5" style={{ color: '#34D399' }}>
+                    ✓ Envío gratuito disponible
+                  </p>
+                )}
               </div>
-              <a href={PS_CART_PAGE} target="_blank" rel="noopener noreferrer"
-                className="text-[11px] font-bold px-3 py-1.5 rounded-xl flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #059669, #10B981)', color: 'white', textDecoration: 'none', boxShadow: '0 4px 12px rgba(16,185,129,0.3)' }}>
-                Tramitar pedido →
-              </a>
+              <button
+                onClick={() => handleCheckout(null, null)}
+                disabled={isCheckingOut}
+                className="text-[11px] font-bold px-3 py-1.5 rounded-xl flex-shrink-0 transition-all duration-200 disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, #059669, #10B981)', color: 'white', boxShadow: '0 4px 12px rgba(16,185,129,0.3)', border: 'none', cursor: 'pointer' }}>
+                {isCheckingOut ? 'Preparando…' : 'Tramitar pedido →'}
+              </button>
             </div>
           )}
 
@@ -630,6 +848,38 @@ export default function Chatbot() {
                   style={{ position: 'absolute', top: '-8px', right: '-8px', width: '20px', height: '20px', borderRadius: '50%', background: '#EF4444', border: '2px solid #09131F', color: 'white', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
               <p className="text-[11px] mb-1" style={{ color: 'rgba(148,163,184,0.7)' }}>Imagen lista. Escribe un comentario o envía directamente.</p>
+            </div>
+          )}
+
+          {/* Panel de identificación — visible solo cuando no hay cliente identificado */}
+          {!customer && (
+            <div className="flex-shrink-0 px-4 py-3" style={{ background: '#06101C', borderTop: '1px solid rgba(0,100,200,0.2)' }}>
+              <p className="text-[10px] font-semibold mb-1.5" style={{ color: 'rgba(148,163,184,0.7)' }}>
+                🔐 Identifícate para ver tus precios B2B y tramitar pedidos
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  placeholder="tu@email.com (el de b2b.esgas.es)"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(loginEmail); } }}
+                  disabled={isLoginLoading}
+                  className="flex-1 text-[11px] rounded-xl px-3 py-2 outline-none transition-all min-w-0 disabled:opacity-50"
+                  style={{ background: '#101D30', color: '#CDD6E3', border: `1px solid ${loginError ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.07)'}` }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleLogin(loginEmail)}
+                  disabled={isLoginLoading || !loginEmail.trim()}
+                  className="text-[11px] font-bold px-3 py-2 rounded-xl flex-shrink-0 transition-all duration-200 disabled:opacity-40"
+                  style={{ background: 'linear-gradient(135deg, #0047C8, #0092C2)', color: 'white', border: 'none', cursor: 'pointer' }}>
+                  {isLoginLoading ? '…' : 'Entrar'}
+                </button>
+              </div>
+              {loginError && (
+                <p className="text-[9px] mt-1" style={{ color: '#F87171' }}>{loginError}</p>
+              )}
             </div>
           )}
 
